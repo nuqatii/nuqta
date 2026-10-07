@@ -1,0 +1,18 @@
+{
+  "name": "nuqta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-tenant loyalty card + CRM for local businesses (static site + Firebase).",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test tests/service.test.mjs tests/i18n.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore \"node --test tests/rules/rules.test.mjs\"",
+    "deploy:rules": "firebase deploy --only firestore"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^12.0.0",
+    "firebase-tools": "^14.0.0"
+  }
+}

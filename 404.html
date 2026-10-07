@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Redirecting…</title>
+<script>
+// Pretty links on GitHub Pages: /join/<slug> → rewards.html?b=<slug>, /c/<token> → rewards.html?c=<token>
+(function () {
+  var p = location.pathname, m;
+  if ((m = p.match(/^(.*?)\/join\/([a-z0-9-]+)\/?$/i))) return location.replace(m[1] + '/rewards.html?b=' + m[2]);
+  if ((m = p.match(/^(.*?)\/c\/([A-Za-z0-9]+)\/?$/))) return location.replace(m[1] + '/rewards.html?c=' + m[2]);
+  location.replace(p.replace(/\/[^/]*$/, '/') || '/');
+})();
+</script></head><body></body></html>

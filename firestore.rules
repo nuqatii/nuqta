@@ -1,0 +1,196 @@
+rules_version = '2';
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenant isolation: every business document lives under /businesses/{bid}, and
+// access is decided by /businesses/{bid}/members/{uid}.role. Changing an ID in a
+// URL or API call never grants access to another business's data.
+// Role matrix mirrors PERMISSIONS in assets/js/core/loyalty.js.
+// Customers never log in: their card lives at /cards/{token} where the token is a
+// 24-char random secret (≈140 bits) only shared with them.
+// ─────────────────────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() { return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+    function uid() { return request.auth.uid; }
+    function isAdmin() { return signedIn() && exists(/databases/$(db)/documents/platformAdmins/$(uid())); }
+    function bizPath(bid) { return /databases/$(db)/documents/businesses/$(bid); }
+    function biz(bid) { return get(bizPath(bid)).data; }
+    function bizActive(bid) { return biz(bid).status == 'active'; }
+    function memberDoc(bid) { return /databases/$(db)/documents/businesses/$(bid)/members/$(uid()); }
+    function role(bid) { return signedIn() && exists(memberDoc(bid)) ? get(memberDoc(bid)).data.role : ''; }
+    function hasRole(bid, roles) { return role(bid) in roles; }
+    function isMember(bid) { return hasRole(bid, ['owner', 'manager', 'staff', 'marketing']); }
+    function cashier(bid) { return hasRole(bid, ['owner', 'manager', 'staff']); }     // checkout, customers, activity
+    function manages(bid) { return hasRole(bid, ['owner', 'manager']); }             // rewards, program, locations
+    function owner(bid) { return hasRole(bid, ['owner']); }                           // designer, team, settings
+    function crm(bid) { return hasRole(bid, ['owner', 'manager', 'marketing']); }
+    function marketer(bid) { return hasRole(bid, ['owner', 'marketing']); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanged(keys) { return changed().hasOnly(keys); }
+    function incBy1(field) { return request.resource.data[field] == resource.data.get(field, 0) + 1; }
+    function welcomeBonus(bid) { return biz(bid).program.get('welcomeBonus', 0); }
+    // During business creation the business doc is written in the same batch.
+    function creatingOwnBusiness(bid) { return signedIn() && getAfter(bizPath(bid)).data.ownerUid == uid() && !exists(bizPath(bid)); }
+
+    // ── Platform ──────────────────────────────────────────────────────────
+    match /platformAdmins/{u} { allow read: if signedIn() && (u == uid() || isAdmin()); allow write: if false; }  // add admins in the console
+    match /platform/{doc} { allow read: if true; allow write: if isAdmin(); }
+    match /slugs/{slug} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if creatingOwnBusiness(request.resource.data.businessId) && request.resource.data.keys().hasOnly(['businessId']);
+      allow update, delete: if false;
+    }
+    // Usage counters (kept off the public business doc).
+    match /stats/{bid} {
+      allow read: if isMember(bid) || isAdmin();
+      allow create: if creatingOwnBusiness(bid);
+      allow update: if cashier(bid)
+        || (onlyChanged(['statCustomers']) && incBy1('statCustomers') && bizActive(bid));   // public join
+      allow delete: if false;
+    }
+
+    // ── Businesses ────────────────────────────────────────────────────────
+    match /businesses/{bid} {
+      allow get: if true;                // branding, program and tiers power the public join/card pages
+      allow list: if isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == uid()
+        && request.resource.data.status == 'active' && request.resource.data.plan == 'free'
+        && request.resource.data.memberSeq == 0
+        && get(/databases/$(db)/documents/platform/settings).data.get('signupsOpen', true) != false;
+      allow update: if
+           (owner(bid) && onlyChanged(['name', 'type', 'currency', 'lang', 'logo', 'colors', 'program', 'design', 'tiers', 'designVersion']))
+        || (manages(bid) && onlyChanged(['program', 'tiers', 'designVersion']))
+        || (onlyChanged(['memberSeq']) && incBy1('memberSeq') && resource.data.status == 'active')   // public join
+        || (isAdmin() && onlyChanged(['status', 'plan']));
+      allow delete: if false;
+
+      match /members/{m} {
+        allow read: if (signedIn() && resource.data.uid == uid()) || owner(bid) || isAdmin();
+        allow create: if signedIn() && m == uid() && request.resource.data.uid == uid() && request.resource.data.businessId == bid && (
+             (request.resource.data.role == 'owner' && creatingOwnBusiness(bid))
+          || (exists(/databases/$(db)/documents/businesses/$(bid)/invites/$(request.auth.token.email))
+              && get(/databases/$(db)/documents/businesses/$(bid)/invites/$(request.auth.token.email)).data.role == request.resource.data.role
+              && request.resource.data.role in ['manager', 'staff', 'marketing']));
+        allow update: if owner(bid) && resource.data.role != 'owner' && onlyChanged(['role']) && request.resource.data.role in ['manager', 'staff', 'marketing'];
+        allow delete: if owner(bid) && resource.data.role != 'owner';
+      }
+      match /invites/{email} {
+        allow read: if owner(bid) || (signedIn() && request.auth.token.email == email);
+        allow create, update: if owner(bid) && request.resource.data.email == email && request.resource.data.role in ['manager', 'staff', 'marketing'];
+        allow delete: if owner(bid) || (signedIn() && request.auth.token.email == email);
+      }
+      match /private/{doc} {
+        allow read, update: if owner(bid);
+        allow create: if creatingOwnBusiness(bid) || owner(bid);
+        allow delete: if false;
+      }
+
+      // ── Customers ───────────────────────────────────────────────────────
+      match /customers/{cid} {
+        function fresh() {
+          let d = request.resource.data;
+          return d.businessId == bid && d.points == welcomeBonus(bid) && d.lifetimePoints == d.points
+            && d.visits == 0 && d.spend == 0 && d.redeemedCount == 0 && d.lastVisitAt == null
+            && d.cardToken is string && d.cardToken.size() >= 20
+            && existsAfter(/databases/$(db)/documents/businesses/$(bid)/phones/$(d.phone))
+            && !exists(/databases/$(db)/documents/businesses/$(bid)/phones/$(d.phone))
+            && bizActive(bid);
+        }
+        allow read: if isMember(bid);
+        allow create: if fresh() && (isMember(bid) ? request.resource.data.source == 'staff' : request.resource.data.source == 'qr');
+        allow update: if
+             (cashier(bid) && bizActive(bid) && onlyChanged(['points', 'lifetimePoints', 'visits', 'spend', 'lastVisitAt', 'tierId', 'redeemedCount',
+                'firstName', 'lastName', 'email', 'birthday', 'gender', 'notes', 'marketingConsent', 'preferredChannel'])
+              && request.resource.data.points >= 0)
+          || (hasRole(bid, ['marketing']) && onlyChanged(['firstName', 'lastName', 'email', 'birthday', 'gender', 'notes', 'marketingConsent', 'preferredChannel']))
+          // the customer editing their own details from their card (customer ids are only revealed via the secret card)
+          || onlyChanged(['lastName', 'email', 'birthday', 'marketingConsent', 'preferredChannel']);
+        allow delete: if owner(bid);
+      }
+      // Phone uniqueness lock. Public get lets the join page say "already a member".
+      match /phones/{phone} {
+        allow get: if true;
+        allow list: if cashier(bid);
+        allow create: if request.resource.data.keys().hasOnly(['at']) && bizActive(bid);
+        allow update: if false;
+        allow delete: if owner(bid);
+      }
+      // Immutable ledger of joins, purchases, redemptions and adjustments.
+      match /activity/{id} {
+        allow read: if cashier(bid);
+        allow create: if (cashier(bid) && request.resource.data.staffUid == uid() && bizActive(bid))
+          || (isMember(bid) && request.resource.data.type == 'join' && request.resource.data.staffUid == uid() && request.resource.data.points == welcomeBonus(bid))
+          || (request.resource.data.type == 'join' && request.resource.data.staffUid == null && request.resource.data.points == welcomeBonus(bid) && bizActive(bid));
+        allow update, delete: if false;
+      }
+      match /rewards/{rid} {
+        allow read: if true;
+        allow create, delete: if manages(bid);
+        allow update: if manages(bid) || (cashier(bid) && onlyChanged(['redeemedCount']) && incBy1('redeemedCount'));
+      }
+      // Reward codes: customer creates a pending code; cashier flips it to redeemed exactly once.
+      match /redemptions/{code} {
+        function validCustomerRequest() {
+          let d = request.resource.data;
+          let card = get(/databases/$(db)/documents/cards/$(d.cardToken)).data;
+          let rw = get(/databases/$(db)/documents/businesses/$(bid)/rewards/$(d.rewardId)).data;
+          return d.status == 'pending' && d.source == 'customer' && card.businessId == bid && card.customerId == d.customerId
+            && rw.active == true && d.cost == rw.cost && card.points >= rw.cost && d.expiresAt <= request.time.toMillis() + 3 * 3600 * 1000;
+        }
+        allow read: if cashier(bid);
+        allow create: if validCustomerRequest()
+          || (cashier(bid) && request.resource.data.status == 'redeemed' && request.resource.data.staffUid == uid());
+        allow update: if cashier(bid) && resource.data.status == 'pending' && request.resource.data.status == 'redeemed'
+          && request.resource.data.staffUid == uid() && request.resource.data.cost == resource.data.cost;
+        allow delete: if false;
+      }
+      match /locations/{lid} { allow read: if isMember(bid); allow write: if manages(bid); }
+      match /segments/{sid} { allow read, write: if crm(bid); }
+      match /templates/{tid} { allow read, write: if marketer(bid); }
+      match /campaigns/{cid} {
+        allow read, write: if marketer(bid);
+        match /recipients/{rid} { allow read, write: if marketer(bid); }
+      }
+      match /audit/{id} {
+        allow read: if owner(bid) || isAdmin();
+        allow create: if (isMember(bid) || isAdmin()) && request.resource.data.actorUid == uid();
+        allow update, delete: if false;
+      }
+    }
+
+    // Collection-group lookups used at sign-in.
+    match /{path=**}/members/{m} { allow read: if signedIn() && resource.data.uid == uid(); }
+    match /{path=**}/invites/{email} { allow read: if signedIn() && resource.data.email == request.auth.token.email; }
+
+    // ── Customer cards (token = secret) ───────────────────────────────────
+    match /cards/{token} {
+      function cardBizStaff() { return cashier(resource.data.businessId); }
+      allow get: if true;
+      allow list: if false;
+      allow create: if token.size() >= 20 && request.resource.data.points == welcomeBonus(request.resource.data.businessId)
+        && bizActive(request.resource.data.businessId)
+        && getAfter(/databases/$(db)/documents/businesses/$(request.resource.data.businessId)/customers/$(request.resource.data.customerId)).data.cardToken == token;
+      allow update: if (cardBizStaff() && request.resource.data.businessId == resource.data.businessId && request.resource.data.customerId == resource.data.customerId)
+        || (hasRole(resource.data.businessId, ['marketing']) && onlyChanged(['firstName', 'profile', 'updatedAt']))
+        || onlyChanged(['profile']);
+      allow delete: if false;
+
+      match /activity/{id} {
+        allow read: if true;                // reachable only with the token
+        allow create: if cashier(getAfter(/databases/$(db)/documents/cards/$(token)).data.businessId)
+          || (request.resource.data.type == 'join' && !exists(/databases/$(db)/documents/cards/$(token))
+              && existsAfter(/databases/$(db)/documents/cards/$(token)));
+        allow update, delete: if false;
+      }
+      match /redemptions/{code} {
+        allow read: if true;
+        allow create: if (request.resource.data.status == 'pending' && request.resource.data.cardToken == token)
+          || cashier(get(/databases/$(db)/documents/cards/$(token)).data.businessId);
+        allow update: if cashier(get(/databases/$(db)/documents/cards/$(token)).data.businessId);
+        allow delete: if false;
+      }
+    }
+  }
+}
