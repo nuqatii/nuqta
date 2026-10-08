@@ -1,10 +1,11 @@
 // Customer experience: join via QR (?b=slug) and the digital card app (?c=token). No login.
 import { getService } from '../data/index.js';
-import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName } from '../core/i18n.js';
+import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName } from '../core/i18n.js';
 import { tierFor, nextTier, CHANNELS } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, modal, qrSvg, errText } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
 import { EV_ICON, eventTitle, signed, evName } from './biz-common.js';
+import { wallet, snapshot } from '../core/wallet.js';
 
 const S = await getService();
 const root = document.getElementById('root');
@@ -15,12 +16,16 @@ const toggleLang = () => { localStorage.setItem(LANG_KEY, lang === 'ar' ? 'en' :
 const brand = (b) => { document.querySelector('meta[name=theme-color]').content = b.colors?.bg || '#0F6E5C'; document.title = programName(b); };
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+let installPrompt = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; document.querySelector('[data-install]')?.removeAttribute('hidden'); });
+// Back-to-wallet button used in the card and join headers.
+const walletLink = () => `<a class="btn ghost sm icon" href="rewards.html" aria-label="${t('w_title')}" title="${t('w_title')}">${icon(lang === 'ar' ? 'chevron' : 'back')}</a>`;
 
 // ── Join ───────────────────────────────────────────────
 async function join(slug) {
   const b = await S.getBusinessBySlug(slug);
   if (!b) { root.className = 'center-load'; root.innerHTML = `<p class="muted">${t('err_not-found')}</p>`; return; }
-  const saved = localStorage.getItem('nuqta_card_' + b.id);
+  const saved = wallet.tokenFor(b.id);
   if (saved && !qs.has('new')) return location.replace(`rewards.html?c=${saved}`);
   applyLang(b.lang); brand(b);
   const unit = unitWord(b.program, b.currency);
@@ -30,6 +35,7 @@ async function join(slug) {
     root.className = 'cust'; root.style.setProperty('--cb', b.colors?.bg || '#0F6E5C'); root.style.paddingBottom = '24px';
     root.innerHTML = `
     <header class="join-hero" style="color:${esc(b.colors?.text || '#fff')}">
+      ${wallet.all().length ? `<a class="btn ghost sm" href="rewards.html" style="position:absolute;top:12px;inset-inline-start:12px;color:inherit">${icon('card')}${t('w_title')}</a>` : ''}
       <button class="btn ghost sm" id="lang" style="position:absolute;top:12px;inset-inline-end:12px;color:inherit">${t('switch_lang')}</button>
       ${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ''}
       <h1>${t('join_title', { biz: esc(b.name) })}</h1>
@@ -54,7 +60,7 @@ async function join(slug) {
       e.preventDefault(); const btn = f.querySelector('[type=submit]'); btn.disabled = true; $('#err').innerHTML = '';
       try {
         const r = await S.joinProgram(slug, { firstName: f.firstName.value, phone: f.phone.value, email: f.email.value, marketingConsent: f.consent.checked });
-        localStorage.setItem('nuqta_card_' + b.id, r.cardToken);
+        wallet.save(r.cardToken, b.id, null);
         location.replace(`rewards.html?c=${r.cardToken}&welcome=1`);
       } catch (err) {
         const field = { 'invalid-phone': 'phone', 'invalid-email': 'email', 'invalid-name': 'firstName' }[err.code];
@@ -70,9 +76,13 @@ async function join(slug) {
 // ── Card app ───────────────────────────────────────────
 async function cardApp(token) {
   let data = await S.getCard(token);
-  if (!data) { applyLang(); root.className = 'center-load'; root.innerHTML = `<div class="empty">${icon('card')}<p>${t('c_card_missing')}</p></div>`; return; }
+  if (!data) {
+    wallet.remove(token); applyLang(); root.className = 'center-load';
+    root.innerHTML = `<div class="empty">${icon('card')}<p>${t('c_card_missing')}</p><a class="btn" href="rewards.html">${t('w_title')}</a></div>`; return;
+  }
   const b = data.business;
-  localStorage.setItem('nuqta_card_' + b.id, token);
+  const remember = () => wallet.save(token, b.id, snapshot(data.business, data.card, data.rewards.filter((r) => data.card.points >= r.cost).length));
+  remember();
   applyLang(b.lang); brand(b);
   let tab = location.hash.slice(1) || 'card';
   let acts = null, reds = null;
@@ -81,7 +91,7 @@ async function cardApp(token) {
 
   async function refresh() {
     const [d, r] = await Promise.all([S.getCard(token), S.listCardRedemptions(token)]);
-    if (d) data = d; reds = r; acts = null;
+    if (d) { data = d; remember(); } reds = r; acts = null;
   }
   reds = await S.listCardRedemptions(token);
 
@@ -92,7 +102,7 @@ async function cardApp(token) {
 
   function shell(inner) {
     root.className = 'cust'; root.style.setProperty('--cb', b.colors?.bg || '#0F6E5C');
-    root.innerHTML = `<header class="cust-head">${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ''}<b>${esc(b.name)}</b><button class="btn ghost sm" id="lang">${t('switch_lang')}</button></header>
+    root.innerHTML = `<header class="cust-head">${walletLink()}${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ''}<b>${esc(b.name)}</b><button class="btn ghost sm" id="lang">${t('switch_lang')}</button></header>
       <main class="cust-body" id="cb">${inner}</main>
       <nav class="cust-nav"><div>${[['card', 'card', t('c_card')], ['rewards', 'gift', t('c_rewards')], ['activity', 'clock', t('c_activity')], ['profile', 'user', t('c_profile')]].map(([id, ic, label]) =>
         `<button data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${id === 'rewards' && ready().length ? `<span class="badge">${ready().length}</span>` : ''}</button>`).join('')}</div></nav>`;
@@ -104,7 +114,7 @@ async function cardApp(token) {
     const c = data.card; const tier = tierFor(b.tiers, c.lifetimePoints); const nx = nextTier(b.tiers, c.lifetimePoints);
     const stampy = b.program.type === 'stamps' || b.program.type === 'visits';
     const cheapest = [...live()].sort((x, y) => x.cost - y.cost).find((r) => r.cost > c.points);
-    return `${welcome ? `<div class="note" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}<b>${t('join_welcome', { program: esc(programName(b)) })}</b></div>` : ''}
+    return `${welcome ? `<div class="note" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}<span><b>${t('join_welcome', { program: esc(programName(b)) })}</b><br><span class="small">${t('w_saved')}</span></span></div>` : ''}
       ${renderCard({ business: b, card: c, rewardsReady: ready().length })}
       <p class="small muted" style="text-align:center">${t('c_show_staff')}</p>
       ${openCodes().length ? `<section class="panel"><div class="panel-h"><h3>${t('c_open_codes')}</h3></div><div class="panel-b"><ul class="list">${openCodes().map((r) => `<li><span class="grow"><span class="t">${esc(evName(r))}</span><span class="s">${t('c_code_exp', { t: fmtTime(r.expiresAt) })}</span></span><button class="btn sm" data-show="${esc(r.id)}">${esc(r.id)}</button></li>`).join('')}</ul></div></section>` : ''}
@@ -197,8 +207,81 @@ async function cardApp(token) {
   document.addEventListener('visibilitychange', poll);
 }
 
+// ── My cards ───────────────────────────────────────────
+async function walletPage() {
+  applyLang();
+  document.title = t('w_title');
+  let editing = false, offline = false;
+  let list = wallet.all();
+
+  const tile = (e) => {
+    const sn = e.snap; if (!sn) return `<div class="wtile skel" aria-hidden="true"></div>`;
+    const b = sn.biz; const c = sn.card; const stampy = b.program?.type === 'stamps' || b.program?.type === 'visits';
+    const style = b.design?.style === 'minimal' ? 'solid' : b.design?.style || 'gradient';
+    const bal = stampy && b.program?.goal ? `${fmtNum(Math.min(c.points, b.program.goal))}<span class="of">/${fmtNum(b.program.goal)}</span>` : fmtNum(c.points);
+    const tier = (b.tiers || []).length > 1 ? tierFor(b.tiers, c.lifetimePoints) : null;
+    return `<${editing ? 'div' : 'a'} class="wtile st-${esc(style)}" ${editing ? '' : `href="rewards.html?c=${esc(e.token)}"`} data-token="${esc(e.token)}"
+      style="--cb:${esc(b.colors?.bg || '#0F6E5C')};--cs:${esc(b.colors?.secondary || '#E8A33D')};--ct:${esc(b.colors?.text || '#fff')}">
+      <span class="wlogo">${b.logo ? `<img src="${esc(b.logo)}" alt="">` : icon(b.design?.icon || 'star')}</span>
+      <span class="wnames"><b>${esc(programName(b))}</b><small>${esc(b.name)}${tier ? ` · ${esc(tierName(tier))}` : ''}</small></span>
+      <span class="wbal"><b class="num">${bal}</b><small>${esc(unitWord(b.program, b.currency))}</small></span>
+      ${sn.ready ? `<span class="wready">${icon('gift')}${t('w_rewards_ready', { n: fmtNum(sn.ready) })}</span>` : ''}
+      ${editing ? `<button class="wremove" data-remove="${esc(e.token)}" aria-label="${t('w_remove')}">${icon('x')}</button>` : ''}
+    </${editing ? 'div' : 'a'}>`;
+  };
+
+  function draw() {
+    const ready = list.reduce((n, e) => n + (e.snap?.ready || 0), 0);
+    root.className = 'cust'; root.style.removeProperty('--cb'); root.style.paddingBottom = '24px';
+    root.innerHTML = `<header class="cust-head"><span class="wdot" aria-hidden="true"></span><b>${t('w_title')}</b>
+        ${list.length ? `<button class="btn ghost sm" id="edit">${editing ? t('done') : t('edit')}</button>` : ''}
+        <button class="btn ghost sm" id="lang">${t('switch_lang')}</button></header>
+      <main class="cust-body">
+        ${list.length ? `<p class="small muted">${list.length === 1 ? t('w_count_one') : t('w_count', { n: fmtNum(list.length) })}${ready ? ` · ${t('c_rewards_count', { n: fmtNum(ready) })}` : ''}</p>
+          <div class="wallet">${list.map(tile).join('')}</div>
+          ${offline ? `<p class="tiny muted">${t('w_offline')}</p>` : ''}`
+        : `<div class="empty" style="padding-top:48px">${icon('card')}<b style="color:var(--ink)">${t('w_empty_t')}</b><p>${t('w_empty_d')}</p></div>`}
+        <div class="note">${icon('info')}<span>${t('w_install')}</span></div>
+        <button class="btn block" data-install ${installPrompt ? '' : 'hidden'}>${icon('dl')}${t('w_install_btn')}</button>
+        ${list.length ? `<p class="small muted">${t('w_lost')}</p>` : ''}
+        <p class="tiny muted" style="text-align:center;margin-top:8px">${esc(appName())}</p>
+      </main>`;
+    $('#lang').onclick = () => { toggleLang(); draw(); };
+    $('#edit')?.addEventListener('click', () => { editing = !editing; draw(); });
+    root.querySelector('[data-install]').onclick = async () => { if (installPrompt) { installPrompt.prompt(); installPrompt = null; draw(); } };
+    root.querySelectorAll('[data-remove]').forEach((x) => (x.onclick = async (ev) => {
+      ev.preventDefault();
+      const e = list.find((y) => y.token === x.dataset.remove);
+      const ok = await modal({ title: t('w_remove'), body: `<p>${esc(t('w_remove_d', { biz: e.snap?.biz?.name || '' }))}</p>`,
+        actions: [{ label: t('cancel'), value: false }, { label: t('w_remove'), kind: 'danger', value: true }] });
+      if (ok) { wallet.remove(e.token); list = wallet.all(); if (!list.length) editing = false; draw(); }
+    }));
+  }
+  draw();
+
+  // Refresh balances from the server; keep the saved snapshot if a request fails (offline).
+  async function refresh() {
+    const results = await Promise.allSettled(list.map((e) => S.getCard(e.token)));
+    results.forEach((r, i) => {
+      const e = list[i];
+      if (r.status === 'rejected') { offline = true; return; }
+      if (!r.value) { wallet.remove(e.token); return; }      // card no longer exists
+      const d = r.value;
+      wallet.save(e.token, d.business.id, snapshot(d.business, d.card, d.rewards.filter((x) => d.card.points >= x.cost).length), { opened: false });
+    });
+    list = wallet.all();
+    if (!editing) draw();
+  }
+  await refresh();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+}
+
 try {
   if (qs.get('c')) await cardApp(qs.get('c'));
   else if (qs.get('b')) await join(qs.get('b').toLowerCase());
-  else { root.className = 'center-load'; root.innerHTML = `<a class="btn" href="index.html">${icon('home')}</a>`; }
+  else if (qs.get('add')) {   // e.g. a shared link with several cards; also used by the demo
+    for (const tok of qs.get('add').split(',').filter((x) => /^[A-Za-z0-9]{20,}$/.test(x))) wallet.save(tok, 'pending:' + tok, null, { opened: false });
+    history.replaceState(null, '', 'rewards.html'); await walletPage();
+  }
+  else await walletPage();
 } catch (e) { showError(e); }

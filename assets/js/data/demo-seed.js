@@ -11,6 +11,7 @@ export const DEMO_ACCOUNTS = {
   admin:     { email: 'admin@nuqta.demo',         password: 'demo1234', name: 'Platform Admin', uid: 'u_admin' },
 };
 export const DEMO_CARD = 'demoMayaCard7Qp2xKw9Lr4Tz';
+export const DEMO_CARD_UC = 'demoMayaCoffee3Hn8Vd5Rk2Wq';   // Maya also belongs to Urban Coffee — shows the multi-card wallet
 
 function rng(seed) {
   return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -168,11 +169,13 @@ export async function seedDemo(db, auth) {
   set(`businesses/${ub}/rewards/rw_coffee`, { name: 'Free coffee', nameAr: 'قهوة مجانية', cost: 9, value: 300, description: 'Your 10th coffee is on us', image: null, expiresAt: null, minPurchase: 0, usageLimit: 0, active: true, redeemedCount: 4, createdAt: NOW - 40 * DAY });
   set(`businesses/${ub}/locations/main`, { name: 'Shaalan', address: '', createdAt: NOW - 40 * DAY });
   for (let i = 0; i < 18; i++) {
-    const id = 'uc' + i + L.randomString(8); const tok = L.cardToken(); const ph = '+9639' + between(30000000, 99999999);
-    const st = between(0, 8); const j = NOW - between(1, 40) * DAY;
-    set(`businesses/${ub}/customers/${id}`, { firstName: pick(FIRST), lastName: pick(LAST), phone: ph, email: '', memberNumber: L.memberNumber(i + 1), cardToken: tok, scanId: 'NQ' + L.randomString(10, 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'), businessId: ub, joinedAt: j, lastVisitAt: j + DAY, visits: st, spend: st * 300, points: st, lifetimePoints: st, redeemedCount: 0, tierId: 'regular', marketingConsent: true, preferredChannel: 'whatsapp', source: 'qr', birthday: '', gender: '', notes: '' });
+    const maya = i === 0;
+    const id = 'uc' + i + L.randomString(8); const tok = maya ? DEMO_CARD_UC : L.cardToken(); const ph = maya ? '+963944123456' : '+9639' + between(30000000, 99999999);
+    const st = maya ? 7 : between(0, 8); const j = NOW - between(1, 40) * DAY;
+    const fn = maya ? 'مايا' : pick(FIRST); const scan = 'NQ' + L.randomString(10, 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789');
+    set(`businesses/${ub}/customers/${id}`, { firstName: fn, lastName: maya ? 'الحلبي' : pick(LAST), phone: ph, email: '', memberNumber: L.memberNumber(i + 1), cardToken: tok, scanId: scan, businessId: ub, joinedAt: j, lastVisitAt: NOW - between(1, 5) * DAY, visits: st, spend: st * 300, points: st, lifetimePoints: st, redeemedCount: 0, tierId: 'regular', marketingConsent: true, preferredChannel: 'whatsapp', source: 'qr', birthday: '', gender: '', notes: '' });
     set(`businesses/${ub}/phones/${ph}`, { at: j });
-    set(`cards/${tok}`, { businessId: ub, customerId: id, memberNumber: L.memberNumber(i + 1), passId: `${ub}.${i + 1}`, qrValue: 'x', barcodeValue: L.memberNumber(i + 1), walletStatus: 'none', joinedAt: j, points: st, lifetimePoints: st, visits: st, tierId: 'regular', firstName: 'x', updatedAt: NOW });
+    set(`cards/${tok}`, { businessId: ub, customerId: id, memberNumber: L.memberNumber(i + 1), passId: `${ub}.${i + 1}`, qrValue: scan, barcodeValue: L.memberNumber(i + 1), walletStatus: 'none', joinedAt: j, points: st, lifetimePoints: st, visits: st, tierId: 'regular', firstName: fn, updatedAt: NOW, profile: { lastName: '', email: '', birthday: '', marketingConsent: true, preferredChannel: 'whatsapp' } });
   }
 
   await db.batch(ops);

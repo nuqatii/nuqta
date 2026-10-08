@@ -3,7 +3,7 @@ import { getService } from '../data/index.js';
 import { t, setLang, lang, appName } from '../core/i18n.js';
 import { esc, icon, showError, toast, $ } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
-import { DEMO_ACCOUNTS, DEMO_CARD } from '../data/demo-seed.js';
+import { DEMO_ACCOUNTS, DEMO_CARD, DEMO_CARD_UC } from '../data/demo-seed.js';
 
 const S = await getService();
 const root = document.getElementById('root');
@@ -55,7 +55,7 @@ function render() {
       <div class="spread"><h3>${t('demo_accounts')}</h3><span class="tiny muted ltr">${t('demo_pw')}</span></div>
       <div class="demo-list">
         ${['owner', 'staff', 'marketing', 'admin'].map((k) => `<button data-demo="${k}">${icon(k === 'admin' ? 'shield' : k === 'staff' ? 'scan' : k === 'marketing' ? 'send' : 'building')}<span class="grow"><b>${k === 'admin' ? t('admin_console') : t('role_' + k) + " · Joe's Pizza"}</b><small class="ltr">${DEMO_ACCOUNTS[k].email}</small></span></button>`).join('')}
-        <a class="btn ghost block" href="rewards.html?c=${DEMO_CARD}">${icon('card')}${lang === 'ar' ? 'شاهد بطاقة زبون' : 'See a customer’s card'}</a>
+        <a class="btn ghost block" href="rewards.html?add=${DEMO_CARD},${DEMO_CARD_UC}">${icon('card')}${lang === 'ar' ? 'شاهد بطاقات زبونة' : 'See a customer’s cards'}</a>
         <a class="btn ghost block" href="rewards.html?b=joespizza">${icon('qr')}${lang === 'ar' ? 'جرّب صفحة الانضمام' : 'Try the join page'}</a>
       </div>
     </div>` : ''}

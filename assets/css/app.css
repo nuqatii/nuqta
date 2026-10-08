@@ -444,3 +444,36 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: .92rem; }
 svg.i { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
 .av svg.i { width: 52%; height: 52%; }
 .unlock { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ── My cards (customer wallet) ─────────────────────── */
+.wdot { width: 12px; height: 12px; border-radius: 50%; background: var(--saffron); box-shadow: 0 0 0 4px var(--saffron-tint); flex: none; margin-inline: 4px; }
+.wallet { display: grid; gap: 12px; }
+.wtile { --cb: #0F6E5C; --cs: #E8A33D; --ct: #fff;
+  position: relative; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "logo names bal" "logo ready bal";
+  column-gap: 12px; row-gap: 2px; align-items: center; min-height: 92px; padding: 16px 18px; border-radius: 20px;
+  color: var(--ct); background: var(--cb); text-decoration: none !important; overflow: hidden; isolation: isolate;
+  box-shadow: 0 1px 1px rgba(0,0,0,.05), 0 14px 28px -18px rgba(0,0,0,.55); transition: transform .12s; }
+.wtile.st-gradient { background: linear-gradient(145deg, var(--cb) 0%, color-mix(in srgb, var(--cb) 70%, var(--cs)) 130%); }
+.wtile.st-split { background: linear-gradient(to bottom, var(--cb) 0 70%, var(--cs) 70% 100%); }
+.wtile::after { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,.16), transparent 55%); }
+a.wtile:active { transform: scale(.985); }
+.wtile .wlogo { grid-area: logo; width: 48px; height: 48px; border-radius: 13px; background: rgba(255,255,255,.95); display: grid; place-items: center; overflow: hidden; }
+.wtile .wlogo img { width: 100%; height: 100%; object-fit: cover; }
+.wtile .wlogo svg { width: 26px; height: 26px; color: var(--cb); }
+.wtile .wnames { grid-area: names; min-width: 0; align-self: end; }
+.wtile .wnames b { display: block; font-weight: 600; font-size: 1.02rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wtile .wnames small { display: block; font-size: .78rem; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wtile .wbal { grid-area: bal; text-align: end; line-height: 1.05; }
+.wtile .wbal b { display: block; font-size: 1.75rem; font-weight: 700; letter-spacing: -.01em; direction: ltr; }
+.wtile .wbal .of { font-size: .55em; font-weight: 500; opacity: .75; }
+.wtile .wbal small { font-size: .74rem; opacity: .8; }
+.wtile .wready { grid-area: ready; justify-self: start; align-self: start; display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 9px; border-radius: 99px;
+  background: var(--saffron); color: #3B2604; font-size: .74rem; font-weight: 600; }
+.wtile .wready svg { width: 13px; height: 13px; }
+.wtile .wremove { position: absolute; top: 8px; inset-inline-end: 8px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.wtile .wremove svg { width: 16px; height: 16px; }
+.wtile.skel { background: var(--line-2); box-shadow: none; animation: pulse 1.2s ease-in-out infinite alternate; }
+@keyframes pulse { to { opacity: .55; } }
+.cust-head .btn.icon { margin-inline-end: -6px; }
+[hidden] { display: none !important; }
+.empty svg.i { width: 36px; height: 36px; }
