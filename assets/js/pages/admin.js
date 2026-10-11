@@ -29,7 +29,7 @@ async function render() {
   root.innerHTML = `${S.mode === 'demo' ? `<div class="demo-bar">${t('demo_banner')}</div>` : ''}
   <main class="page" style="margin-inline:auto">
     <div class="page-head"><div><div class="brandmark" style="padding:0 0 8px"><span class="dot"></span>${esc(appName())}</div><h1>${t('ad_title')}</h1><p>${t('ad_privacy')}</p></div>
-      <div class="actions"><a class="btn ghost" href="app.html">${icon('building')}${lang === 'ar' ? 'نشاطي' : 'My business'}</a><button class="btn ghost" id="lang">${icon('globe')}${t('switch_lang')}</button><button class="btn" id="out">${icon('out')}${t('nav_signout')}</button></div></div>
+      <div class="actions"><button class="btn ghost" id="lang">${icon('globe')}${t('switch_lang')}</button><button class="btn" id="out">${icon('out')}${t('nav_signout')}</button></div></div>
     <section class="kpis">
       <div class="kpi"><div class="l">${t('ad_businesses')}</div><div class="v">${fmtNum(list.length)}</div><div class="d muted">${fmtNum(list.filter((b) => b.createdAt > now - 30 * DAY).length)} ${t('ad_new')}</div></div>
       <div class="kpi"><div class="l">${t('ad_k_trials')}</div><div class="v">${fmtNum(count('trial'))}</div></div>

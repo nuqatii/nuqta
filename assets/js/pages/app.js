@@ -53,6 +53,7 @@ const ctx = {
 
 async function boot() {
   if (!ctx.user) return location.replace('index.html?next=app.html');
+  if (await S.isPlatformAdmin()) return location.replace('admin.html');   // admin accounts don't run a business
   ctx.platform = await S.platformSettings().catch(() => null);
   ctx.memberships = await S.myMemberships();
   if (!ctx.memberships.length) {

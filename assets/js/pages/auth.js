@@ -10,9 +10,11 @@ const root = document.getElementById('root');
 let view = new URLSearchParams(location.search).get('view') === 'signup' ? 'signup' : 'signin';
 
 async function routeAfterLogin() {
-  const next = new URLSearchParams(location.search).get('next');
-  if (next && /^[a-z]+\.html/.test(next)) return location.replace(next);
+  // The platform admin account only ever uses the admin console. To run your own shop,
+  // sign up with a separate email like any other business.
   if (await S.isPlatformAdmin()) return location.replace('admin.html');
+  const next = new URLSearchParams(location.search).get('next');
+  if (next && /^(app|rewards)\.html/.test(next)) return location.replace(next);
   location.replace('app.html');
 }
 

@@ -145,3 +145,9 @@ test('new businesses start on the platform trial length', async () => {
   assert.equal(L.accessState(b).state, 'trial');
   assert.equal(L.accessState(b).daysLeft, 30);
 });
+
+test('the platform admin account cannot own a business', async () => {
+  await S.signOut();
+  await S.signIn(DEMO_ACCOUNTS.admin.email, 'demo1234');
+  await assert.rejects(S.createBusiness({ name: 'Admin Shop', type: 'retail' }), /admin-no-business/);
+});

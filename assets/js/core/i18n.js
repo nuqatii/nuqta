@@ -45,6 +45,7 @@ const en = {
   'err_business-suspended': 'This business is paused. Contact support.',
   'err_not-found': 'Not found.',
   'err_signups-closed': 'New businesses can’t sign up right now. Contact support.',
+  'err_admin-no-business': 'The admin account can’t own a business. Sign up with a different email for your own shop.',
   'err_cannot-change-owner': 'The owner’s access can’t be changed here.',
   err_generic: 'Something went wrong: {msg}',
   // onboarding
@@ -244,6 +245,7 @@ const ar = {
   'err_business-suspended': 'هذا النشاط موقوف مؤقتاً. تواصل مع الدعم.',
   'err_not-found': 'غير موجود.',
   'err_signups-closed': 'تسجيل الأنشطة الجديدة متوقف حالياً. تواصل مع الدعم.',
+  'err_admin-no-business': 'حساب الإدارة لا يملك نشاطاً تجارياً. سجّل ببريد آخر لمحلك الخاص.',
   'err_cannot-change-owner': 'لا يمكن تعديل صلاحيات المالك من هنا.',
   err_generic: 'حدث خطأ: {msg}',
   ob_title: 'جهّز برنامج الولاء', ob_sub: 'سبع خطوات قصيرة. تستطيع تغيير كل شيء لاحقاً.',

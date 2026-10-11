@@ -86,6 +86,7 @@ export function createService({ db, auth, mode }) {
     async slugAvailable(slug) { return !(await db.exists(P.slug(slug))); },
     async createBusiness(input) {
       const u = user(); if (!u) fail('unauthenticated');
+      if (await S.isPlatformAdmin()) fail('admin-no-business');
       const name = L.clampStr(input.name, 60); if (!name) fail('invalid-name');
       const platform = await db.get('platform/settings');
       if (platform && platform.signupsOpen === false) fail('signups-closed');
