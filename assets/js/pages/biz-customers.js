@@ -1,5 +1,5 @@
 import { t, fmtNum, fmtMoney, fmtDate, ago, tierName, unitWord, rewardName, lang } from '../core/i18n.js';
-import { tierFor, autoSegment, AUTO_SEGMENTS, rewardIsLive, toLatinDigits, CHANNELS } from '../core/loyalty.js';
+import { tierFor, autoSegment, AUTO_SEGMENTS, rewardIsLive, toLatinDigits, CHANNELS, isStampy, stampState } from '../core/loyalty.js';
 import { esc, icon, $, avatar, fullName, modal, showError, toast, download, toCSV, waLink, copyText } from '../ui/ui.js';
 import { eventTitle, signed, EV_ICON, empty } from './biz-common.js';
 import { baseUrl } from '../config.js';
@@ -10,7 +10,10 @@ export const SEG_COLOR = { new: '#3B82F6', active: '#0F6E5C', loyal: '#7C3AED', 
 export default async function customers(ctx, el, { page, params }) {
   if (page === 'customer') return profile(ctx, el, params[0]);
   const b = ctx.biz;
-  const all = await ctx.customers();
+  const [all, rwList] = await Promise.all([ctx.customers(), ctx.S.listRewards(ctx.bid)]);
+  const liveRw = rwList.filter((r) => rewardIsLive(r));
+  // Stamp cards: show progress toward the next reward plus a gift count for saved-up rewards.
+  const ptsCell = (c) => { if (!isStampy(b.program)) return fmtNum(c.points); const s = stampState(b.program, liveRw, c.points); return `${fmtNum(s.progress)}/${fmtNum(s.goal)}${s.ready ? ` <span class="chip warn" style="padding:0 7px">${icon('gift')}${fmtNum(s.ready)}</span>` : ''}`; };
   const segOf = new Map(all.map((c) => [c.id, autoSegment(c, b.tiers)]));
   const st = { q: '', seg: new URLSearchParams(location.hash.split('?')[1] || '').get('seg') || 'all', sort: 'recent', limit: 50 };
 
@@ -43,7 +46,7 @@ export default async function customers(ctx, el, { page, params }) {
       <tbody>${rows.slice(0, st.limit).map((c) => { const tr = tierFor(b.tiers, c.lifetimePoints); const sg = segOf.get(c.id); return `<tr data-id="${c.id}" tabindex="0">
         <td><div class="row">${avatar(c)}<div style="min-width:0"><div style="font-weight:500">${esc(fullName(c))}</div><div class="small muted"><span class="ltr">${esc(c.phone)}</span> <span class="chip dot" style="--c:${SEG_COLOR[sg]};padding:0 7px;font-size:.72rem">${t('seg_' + sg)}</span></div></div></div></td>
         <td class="hide-sm">${b.tiers.length > 1 ? `<span class="chip dot" style="--c:${esc(tr?.color)}">${esc(tierName(tr))}</span>` : ''}</td>
-        <td class="r pts">${fmtNum(c.points)}</td><td class="r num hide-sm">${fmtNum(c.visits)}</td>
+        <td class="r pts">${ptsCell(c)}</td><td class="r num hide-sm">${fmtNum(c.visits)}</td>
         <td class="hide-sm small muted">${c.lastVisitAt ? ago(c.lastVisitAt) : '—'}</td><td class="r num hide-sm">${fmtMoney(c.spend, b.currency)}</td></tr>`; }).join('')}</tbody></table>
       ${rows.length > st.limit ? `<div style="padding:14px;text-align:center"><button class="btn" id="more">${t('view_all')} (${fmtNum(rows.length)})</button></div>` : ''}
       ${!rows.length ? `<p class="muted" style="padding:24px;text-align:center">${t('co_no_match', { q: esc(st.q) })}</p>` : ''}`;
@@ -117,7 +120,8 @@ async function profile(ctx, el, cid) {
   <div class="cols">
     <div class="c5 stack">
       <section class="kpis" style="grid-template-columns:1fr 1fr;margin:0">
-        <div class="kpi"><div class="l">${t('points')}</div><div class="v">${fmtNum(c.points)}</div><div class="d muted">${esc(unit)}</div></div>
+        ${isStampy(b.program) ? (() => { const s = stampState(b.program, rewards.filter((r) => rewardIsLive(r)), c.points); return `<div class="kpi"><div class="l">${t('c_next_reward')}</div><div class="v">${fmtNum(s.progress)}/${fmtNum(s.goal)}</div><div class="d muted">${s.ready ? (s.ready === 1 ? t('c_rewards_count_one') : t('c_rewards_count', { n: fmtNum(s.ready) })) : esc(unit)}</div></div>`; })()
+          : `<div class="kpi"><div class="l">${t('points')}</div><div class="v">${fmtNum(c.points)}</div><div class="d muted">${esc(unit)}</div></div>`}
         <div class="kpi"><div class="l">${t('lifetime_points')}</div><div class="v">${fmtNum(c.lifetimePoints)}</div></div>
         <div class="kpi" style="border-top:1px solid var(--line-2);border-inline-start:0"><div class="l">${t('visits')}</div><div class="v">${fmtNum(c.visits)}</div></div>
         <div class="kpi" style="border-top:1px solid var(--line-2)"><div class="l">${t('total_spend')}</div><div class="v" style="font-size:1.2rem">${fmtMoney(c.spend, b.currency)}</div></div>

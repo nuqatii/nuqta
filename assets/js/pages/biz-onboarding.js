@@ -14,8 +14,8 @@ export const PALETTES = [
 ];
 const TYPE_ICON = { restaurant: 'pizza', cafe: 'coffee', retail: 'bag', salon: 'scissors', gym: 'dumbbell', beauty: 'sparkle', grocery: 'leaf', other: 'star' };
 const REWARD_IDEAS = {
-  ar: { points: [['مشروب مجاني', 150], ['حلوى مجانية', 300], ['خصم ١٠٪', 500]], visits: [['زيارة مجانية', 10], ['خصم ٢٠٪', 5]], stamps: [['القطعة العاشرة مجاناً', 9]], spend: [['قسيمة بقيمة ١٠٠٠ ل.س', 10000]] },
-  en: { points: [['Free drink', 150], ['Free dessert', 300], ['10% off', 500]], visits: [['Free visit', 10], ['20% off', 5]], stamps: [['10th one free', 9]], spend: [['1,000 SYP voucher', 10000]] },
+  ar: { points: [['مشروب مجاني', 150], ['حلوى مجانية', 300], ['خصم ١٠٪', 500]], visits: [['زيارة مجانية', 10], ['خصم ٢٠٪', 5]], stamps: [['قطعة مجانية', 0]], spend: [['قسيمة بقيمة ١٠٠٠ ل.س', 10000]] },
+  en: { points: [['Free drink', 150], ['Free dessert', 300], ['10% off', 500]], visits: [['Free visit', 10], ['20% off', 5]], stamps: [['Free one on us', 0]], spend: [['1,000 SYP voucher', 10000]] },
 };
 const TOTAL = 7;
 
@@ -63,7 +63,7 @@ export default function onboarding(ctx, root, onDone) {
       case 6: {
         const ideas = REWARD_IDEAS[lang][st.program.type] || [];
         return `<h1>${t('ob_reward')}</h1>
-        <div class="row wrap">${ideas.map(([n, c]) => `<button class="chip" data-idea="${esc(n)}|${c}">${esc(n)} · ${c}</button>`).join('')}</div>
+        <div class="row wrap">${ideas.map(([n, c]) => { c = c || st.program.goal; return `<button class="chip" data-idea="${esc(n)}|${c}">${esc(n)} · ${c}</button>`; }).join('')}</div>
         <div class="grid2">
           <label class="field"><span>${t('rw_name')}</span><input class="input" id="rname" maxlength="60" value="${esc(st.reward.name)}"></label>
           <label class="field"><span>${t('rw_cost')} (${esc(unitWord(st.program, st.currency))})</span><input class="input num" id="rcost" inputmode="numeric" value="${st.reward.cost}"></label>
@@ -119,7 +119,7 @@ export default function onboarding(ctx, root, onDone) {
     $('#next').onclick = next;
     const name = $('#name');
     if (name) { name.oninput = () => { st.name = name.value; refreshPreview(); }; name.onkeydown = (e) => { if (e.key === 'Enter') next(); }; }
-    root.querySelectorAll('[data-type]').forEach((b) => (b.onclick = () => { st.type = b.dataset.type; st.icon = TYPE_ICON[st.type]; if (st.type === 'cafe') { st.program = defaultProgram('stamps', st.currency); st.reward = { name: '', cost: 9 }; } render(); }));
+    root.querySelectorAll('[data-type]').forEach((b) => (b.onclick = () => { st.type = b.dataset.type; st.icon = TYPE_ICON[st.type]; if (st.type === 'cafe') { st.program = defaultProgram('stamps', st.currency); st.reward = { name: '', cost: st.program.goal }; } render(); }));
     $('#logo')?.addEventListener('change', async (e) => { try { st.logo = await readImage(e.target.files[0]); render(); } catch (err) { showError(err); } });
     $('#rmlogo')?.addEventListener('click', () => { st.logo = null; render(); });
     root.querySelectorAll('[data-icon]').forEach((b) => (b.onclick = () => { st.icon = b.dataset.icon; render(); }));
@@ -128,9 +128,9 @@ export default function onboarding(ctx, root, onDone) {
     $('#c-sec')?.addEventListener('input', (e) => { st.colors.secondary = e.target.value; e.target.nextElementSibling.textContent = e.target.value; refreshPreview(); });
     root.querySelectorAll('[data-pt]').forEach((b) => (b.onclick = () => {
       st.program = defaultProgram(b.dataset.pt, st.currency);
-      st.reward.cost = { points: 150, visits: 10, stamps: 9, spend: 10000 }[b.dataset.pt]; render();
+      st.reward.cost = { points: 150, visits: st.program.goal, stamps: st.program.goal, spend: 10000 }[b.dataset.pt]; render();
     }));
-    for (const k of ['per', 'earn', 'goal']) $('#' + k)?.addEventListener('input', (e) => { const v = Number(e.target.value); if (v > 0) { st.program[k] = v; refreshPreview(); } });
+    for (const k of ['per', 'earn', 'goal']) $('#' + k)?.addEventListener('input', (e) => { const v = Number(e.target.value); if (v > 0) { st.program[k] = v; if (k === 'goal') st.reward.cost = v; refreshPreview(); } });
     root.querySelectorAll('[data-idea]').forEach((b) => (b.onclick = () => { const [n, c] = b.dataset.idea.split('|'); st.reward = { name: n, cost: +c }; render(); }));
     $('#rname')?.addEventListener('input', (e) => (st.reward.name = e.target.value));
     $('#rcost')?.addEventListener('input', (e) => (st.reward.cost = Number(e.target.value) || 1));

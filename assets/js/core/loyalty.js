@@ -83,6 +83,27 @@ export function earnFor(program, { amount = 0, qty = 1 } = {}) {
   }
 }
 
+// Number of circles on a stamp/visit card: the cheapest live reward, so the grid fills up
+// exactly when a reward becomes available. Falls back to the program's goal.
+export function stampGoal(program, rewards) {
+  const costs = (rewards || []).filter((r) => rewardIsLive(r)).map((r) => r.cost).filter((n) => n > 0);
+  const g = costs.length ? Math.min(...costs) : (program?.goal || 10);
+  return Math.min(20, Math.max(2, Math.round(g)));
+}
+// Stamp & visit cards count in rounds: the card shows stamps toward the NEXT reward and
+// how many full cards (rewards) are saved up. The stored balance is the plain total, so
+// redeeming one reward simply subtracts one card's worth.
+export const isStampy = (program) => program?.type === 'stamps' || program?.type === 'visits';
+export function stampState(program, rewards, points) {
+  const goal = stampGoal(program, rewards);
+  const p = Math.max(0, Math.floor(points || 0));
+  return { goal, progress: p % goal, ready: Math.floor(p / goal), left: goal - (p % goal) };
+}
+// How many rewards the customer can take right now (shown as "N rewards ready").
+export function readyCount(program, rewards, points) {
+  if (isStampy(program)) return stampState(program, rewards, points).ready;
+  return (rewards || []).filter((r) => rewardIsLive(r) && (points || 0) >= r.cost).length;
+}
 export const unitKey = (type) => ({ points: 'u_points', visits: 'u_visits', stamps: 'u_stamps', spend: 'u_spend' }[type] || 'u_points');
 
 // ── Tiers ───────────────────────────────────────────────────

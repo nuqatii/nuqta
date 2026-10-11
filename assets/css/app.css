@@ -296,6 +296,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .lcard .stamps span.on svg { width: 55%; height: 55%; }
 .lcard .stamps span.gift { border-style: solid; }
 .lcard .stamps span.gift svg { width: 50%; height: 50%; opacity: .8; }
+.lcard .stamps span.gift { position: relative; }
+.lcard .stamps span.gift.ready { box-shadow: 0 0 0 3px var(--ct); animation: giftpulse 1.6s ease-in-out infinite; }
+.lcard .stamps span.gift.ready svg { opacity: 1; }
+.lcard .stamps span.gift em { position: absolute; top: -6px; inset-inline-end: -6px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 99px; background: var(--ct); color: var(--cb); font: 700 .7rem/22px var(--font); font-style: normal; text-align: center; }
+@keyframes giftpulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--ct) 35%, transparent); } }
 /* perforation between the branded face and the scan strip */
 .lcard .tear { position: relative; height: 0; border-top: 2px dashed rgba(0,0,0,.12); z-index: 2; }
 .lcard .tear::before, .lcard .tear::after { content: ''; position: absolute; top: -11px; width: 20px; height: 20px; border-radius: 50%; background: var(--notch, var(--bg)); }

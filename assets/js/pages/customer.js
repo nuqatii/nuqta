@@ -1,7 +1,7 @@
 // Customer experience: join via QR (?b=slug) and the digital card app (?c=token). No login.
 import { getService } from '../data/index.js';
 import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName } from '../core/i18n.js';
-import { tierFor, nextTier, CHANNELS, canOperate } from '../core/loyalty.js';
+import { tierFor, nextTier, CHANNELS, canOperate, stampGoal, stampState, readyCount, isStampy } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, modal, qrSvg, errText } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
 import { EV_ICON, eventTitle, signed, evName } from './biz-common.js';
@@ -83,7 +83,7 @@ async function cardApp(token) {
     root.innerHTML = `<div class="empty">${icon('card')}<p>${t('c_card_missing')}</p><a class="btn" href="rewards.html">${t('w_title')}</a></div>`; return;
   }
   const b = data.business;
-  const remember = () => wallet.save(token, b.id, snapshot(data.business, data.card, data.rewards.filter((r) => data.card.points >= r.cost).length));
+  const remember = () => wallet.save(token, b.id, snapshot(data.business, data.card, readyCount(data.business.program, data.rewards, data.card.points), stampGoal(data.business.program, data.rewards)));
   remember();
   applyLang(b.lang); brand(b);
   let tab = location.hash.slice(1) || 'card';
@@ -100,6 +100,8 @@ async function cardApp(token) {
   const unit = () => unitWord(b.program, b.currency);
   const live = () => data.rewards;
   const ready = () => live().filter((r) => data.card.points >= r.cost);
+  const readyN = () => readyCount(b.program, live(), data.card.points);
+  const ss = () => (isStampy(b.program) ? stampState(b.program, live(), data.card.points) : null);
   const openCodes = () => (reds || []).filter((r) => r.status === 'pending' && r.expiresAt > Date.now());
 
   function shell(inner) {
@@ -107,7 +109,7 @@ async function cardApp(token) {
     root.innerHTML = `<header class="cust-head">${walletLink()}${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ''}<b>${esc(b.name)}</b><button class="btn ghost sm" id="lang">${t('switch_lang')}</button></header>
       <main class="cust-body" id="cb">${inner}</main>
       <nav class="cust-nav"><div>${[['card', 'card', t('c_card')], ['rewards', 'gift', t('c_rewards')], ['activity', 'clock', t('c_activity')], ['profile', 'user', t('c_profile')]].map(([id, ic, label]) =>
-        `<button data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${id === 'rewards' && ready().length ? `<span class="badge">${ready().length}</span>` : ''}</button>`).join('')}</div></nav>`;
+        `<button data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${id === 'rewards' && readyN() ? `<span class="badge">${readyN()}</span>` : ''}</button>`).join('')}</div></nav>`;
     $('#lang').onclick = () => { toggleLang(); render(); };
     root.querySelectorAll('[data-tab]').forEach((x) => (x.onclick = () => { tab = x.dataset.tab; location.hash = tab; render(); }));
   }
@@ -115,13 +117,14 @@ async function cardApp(token) {
   function cardTab() {
     const c = data.card; const tier = tierFor(b.tiers, c.lifetimePoints); const nx = nextTier(b.tiers, c.lifetimePoints);
     const stampy = b.program.type === 'stamps' || b.program.type === 'visits';
-    const cheapest = [...live()].sort((x, y) => x.cost - y.cost).find((r) => r.cost > c.points);
+    const st = ss();
     return `${welcome ? `<div class="note" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}<span><b>${t('join_welcome', { program: esc(programName(b)) })}</b><br><span class="small">${t('w_saved')}</span></span></div>` : ''}
       ${!canOperate(b) ? `<div class="note">${icon('info')}<span>${t('c_paused')}</span></div>` : ''}
-      ${renderCard({ business: b, card: c, rewardsReady: ready().length })}
+      ${renderCard({ business: b, card: c, rewardsReady: readyN(), goal: stampGoal(b.program, live()) })}
+      ${st && st.ready ? `<button class="btn primary lg block" data-tab="rewards">${icon('gift')}${st.ready === 1 ? t('c_rewards_count_one') : t('c_rewards_count', { n: fmtNum(st.ready) })}</button>` : ''}
       <p class="small muted" style="text-align:center">${t('c_show_staff')}</p>
       ${openCodes().length ? `<section class="panel"><div class="panel-h"><h3>${t('c_open_codes')}</h3></div><div class="panel-b"><ul class="list">${openCodes().map((r) => `<li><span class="grow"><span class="t">${esc(evName(r))}</span><span class="s">${t('c_code_exp', { t: fmtTime(r.expiresAt) })}</span></span><button class="btn sm" data-show="${esc(r.id)}">${esc(r.id)}</button></li>`).join('')}</ul></div></section>` : ''}
-      ${stampy && cheapest ? `<section class="panel"><div class="panel-b stack" style="gap:8px"><b>${esc(rewardName(cheapest))}</b><div class="progress-line"><i style="width:${Math.min(100, (c.points / cheapest.cost) * 100)}%"></i></div><span class="small muted">${t('c_stamps_left', { n: fmtNum(cheapest.cost - c.points) })}</span></div></section>` : ''}
+      ${st && live().length ? `<section class="panel"><div class="panel-b stack" style="gap:8px"><b>${t('c_next_reward')}</b><div class="progress-line"><i style="width:${(st.progress / st.goal) * 100}%"></i></div><span class="small muted">${fmtNum(st.progress)}/${fmtNum(st.goal)} · ${t('c_stamps_left', { n: fmtNum(st.left) })}</span></div></section>` : ''}
       ${(b.tiers || []).length > 1 ? `<section class="panel"><div class="panel-b stack" style="gap:8px">
         <div class="spread"><b>${esc(tierName(tier))}</b>${nx ? `<span class="small muted">${esc(tierName(nx))}</span>` : ''}</div>
         ${nx ? `<div class="progress-line"><i style="width:${Math.min(100, ((c.lifetimePoints - (tier?.min || 0)) / (nx.min - (tier?.min || 0))) * 100)}%"></i></div><span class="small muted">${t('c_to_next', { n: fmtNum(nx.min - c.lifetimePoints), unit: esc(unit()), tier: esc(tierName(nx)) })}</span>` : `<span class="small muted">${t('c_top_tier')}</span>`}
@@ -133,12 +136,14 @@ async function cardApp(token) {
       </div></section>`;
   }
   function rewardsTab() {
-    const c = data.card; const avail = ready(); const locked = live().filter((r) => c.points < r.cost);
+    const c = data.card; const avail = ready(); const locked = live().filter((r) => c.points < r.cost); const st = ss();
+    const times = (r) => (st ? Math.floor(c.points / r.cost) : 1);
     const row = (r, ok) => `<div class="reward-row ${ok ? '' : 'locked'}"><span class="ri" ${r.image ? `style="background:url('${esc(r.image)}') center/cover"` : ''}>${r.image ? '' : icon('gift')}</span>
-      <div class="grow" style="flex:1;min-width:0"><b>${esc(rewardName(r))}</b><div class="small muted">${fmtNum(r.cost)} ${esc(unit())}${!ok ? ' · ' + t('c_need_more', { n: fmtNum(r.cost - c.points), unit: esc(unit()) }) : ''}</div>${r.description ? `<div class="small muted">${esc(r.description)}</div>` : ''}</div>
+      <div class="grow" style="flex:1;min-width:0"><b>${esc(rewardName(r))}${ok && times(r) > 1 ? ` <span class="chip brand" style="padding:0 8px">×${fmtNum(times(r))}</span>` : ''}</b><div class="small muted">${fmtNum(r.cost)} ${esc(unit())}${!ok ? ' · ' + t('c_need_more', { n: fmtNum(r.cost - c.points), unit: esc(unit()) }) : ''}</div>${r.description ? `<div class="small muted">${esc(r.description)}</div>` : ''}</div>
       ${ok && canOperate(b) ? `<button class="btn primary sm" data-redeem="${r.id}">${t('c_redeem')}</button>` : ''}</div>`;
     return `<h2>${t('c_rewards')}</h2>
-      <div class="spread"><span class="muted">${t('c_points')}</span><b class="num" style="font-size:1.3rem">${fmtNum(c.points)} <span class="small muted" style="font-weight:400">${esc(unit())}</span></b></div>
+      ${st ? `<div class="spread"><span class="muted">${t('c_next_reward')}</span><b class="num" style="font-size:1.3rem">${fmtNum(st.progress)}/${fmtNum(st.goal)} <span class="small muted" style="font-weight:400">${esc(unit())}</span></b></div>`
+        : `<div class="spread"><span class="muted">${t('c_points')}</span><b class="num" style="font-size:1.3rem">${fmtNum(c.points)} <span class="small muted" style="font-weight:400">${esc(unit())}</span></b></div>`}
       ${avail.length ? `<h3>${t('c_available')}</h3>${avail.map((r) => row(r, true)).join('')}` : ''}
       ${locked.length ? `<h3 style="margin-top:6px">${t('c_locked')}</h3>${locked.map((r) => row(r, false)).join('')}` : ''}
       ${!live().length ? `<p class="muted">${t('rw_empty')}</p>` : ''}`;
@@ -221,7 +226,8 @@ async function walletPage() {
     const sn = e.snap; if (!sn) return `<div class="wtile skel" aria-hidden="true"></div>`;
     const b = sn.biz; const c = sn.card; const stampy = b.program?.type === 'stamps' || b.program?.type === 'visits';
     const style = b.design?.style === 'minimal' ? 'solid' : b.design?.style || 'gradient';
-    const bal = stampy && b.program?.goal ? `${fmtNum(Math.min(c.points, b.program.goal))}<span class="of">/${fmtNum(b.program.goal)}</span>` : fmtNum(c.points);
+    const g = sn.goal || b.program?.goal;
+    const bal = stampy && g ? `${fmtNum(c.points % g)}<span class="of">/${fmtNum(g)}</span>` : fmtNum(c.points);
     const tier = (b.tiers || []).length > 1 ? tierFor(b.tiers, c.lifetimePoints) : null;
     return `<${editing ? 'div' : 'a'} class="wtile st-${esc(style)}" ${editing ? '' : `href="rewards.html?c=${esc(e.token)}"`} data-token="${esc(e.token)}"
       style="--cb:${esc(b.colors?.bg || '#0F6E5C')};--cs:${esc(b.colors?.secondary || '#E8A33D')};--ct:${esc(b.colors?.text || '#fff')}">
@@ -240,7 +246,7 @@ async function walletPage() {
         ${list.length ? `<button class="btn ghost sm" id="edit">${editing ? t('done') : t('edit')}</button>` : ''}
         <button class="btn ghost sm" id="lang">${t('switch_lang')}</button></header>
       <main class="cust-body">
-        ${list.length ? `<p class="small muted">${list.length === 1 ? t('w_count_one') : t('w_count', { n: fmtNum(list.length) })}${ready ? ` · ${t('c_rewards_count', { n: fmtNum(ready) })}` : ''}</p>
+        ${list.length ? `<p class="small muted">${list.length === 1 ? t('w_count_one') : t('w_count', { n: fmtNum(list.length) })}${ready ? ` · ${ready === 1 ? t('c_rewards_count_one') : t('c_rewards_count', { n: fmtNum(ready) })}` : ''}</p>
           <div class="wallet">${list.map(tile).join('')}</div>
           ${offline ? `<p class="tiny muted">${t('w_offline')}</p>` : ''}`
         : `<div class="empty" style="padding-top:48px">${icon('card')}<b style="color:var(--ink)">${t('w_empty_t')}</b><p>${t('w_empty_d')}</p></div>`}
@@ -270,7 +276,7 @@ async function walletPage() {
       if (r.status === 'rejected') { offline = true; return; }
       if (!r.value) { wallet.remove(e.token); return; }      // card no longer exists
       const d = r.value;
-      wallet.save(e.token, d.business.id, snapshot(d.business, d.card, d.rewards.filter((x) => d.card.points >= x.cost).length), { opened: false });
+      wallet.save(e.token, d.business.id, snapshot(d.business, d.card, readyCount(d.business.program, d.rewards, d.card.points), stampGoal(d.business.program, d.rewards)), { opened: false });
     });
     list = wallet.all();
     if (!editing) draw();

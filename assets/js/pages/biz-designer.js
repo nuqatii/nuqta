@@ -3,14 +3,17 @@ import { esc, icon, $, readImage, showError, toast, CARD_ICONS } from '../ui/ui.
 import { renderCard, sampleCard } from '../ui/card.js';
 import { PALETTES } from './biz-onboarding.js';
 
+import { stampGoal } from '../core/loyalty.js';
+
 export default async function designer(ctx, el) {
   const b = ctx.biz;
+  const goal = stampGoal(b.program, await ctx.S.listRewards(ctx.bid));
   const st = { design: { style: 'gradient', layout: 'classic', icon: 'star', codeFormat: 'qr', programName: '', programNameAr: '', cover: null, ...(b.design || {}) },
     colors: { ...b.colors }, logo: b.logo || null, dirty: false };
   const stampy = b.program.type === 'stamps' || b.program.type === 'visits';
 
   const previewBiz = () => ({ ...b, logo: st.logo, colors: st.colors, design: st.design });
-  const drawPreview = () => { $('#pv', el).innerHTML = renderCard({ business: previewBiz(), card: sampleCard(previewBiz(), lang === 'ar' ? 'مايا' : 'Maya'), rewardsReady: 2 }); };
+  const drawPreview = () => { $('#pv', el).innerHTML = renderCard({ business: previewBiz(), card: sampleCard(previewBiz(), lang === 'ar' ? 'مايا' : 'Maya'), rewardsReady: 2, goal }); };
   const dirty = () => { st.dirty = true; $('#save', el).disabled = false; drawPreview(); };
 
   const seg = (key, opts, labelKey) => `<div class="seg" role="group">${opts.map((o) => `<button type="button" data-${key}="${o}" aria-pressed="${st.design[key] === o}">${t(labelKey + o)}</button>`).join('')}</div>`;

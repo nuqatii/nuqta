@@ -6,13 +6,13 @@ function read() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } 
 function write(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* storage full or blocked */ } }
 
 // Snapshot of just what the list needs (raw values; labels are localised at render time).
-export function snapshot(business, card, readyCount = 0) {
+export function snapshot(business, card, readyCount = 0, goal = null) {
   const b = business || {};
   return {
     biz: { name: b.name, slug: b.slug, logo: b.logo || null, colors: b.colors, currency: b.currency, program: b.program, tiers: b.tiers,
       design: { programName: b.design?.programName || '', programNameAr: b.design?.programNameAr || '', icon: b.design?.icon || 'star', style: b.design?.style } },
     card: { points: card?.points || 0, lifetimePoints: card?.lifetimePoints || 0, firstName: card?.firstName || '' },
-    ready: readyCount,
+    ready: readyCount, goal,
   };
 }
 

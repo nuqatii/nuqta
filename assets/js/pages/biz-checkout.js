@@ -1,6 +1,6 @@
 // Staff checkout: identify → amount → done. Keyboard-first, scanner optional.
 import { t, fmtNum, fmtMoney, unitWord, tierName, rewardName, ago, fmtDate, lang, curLabel } from '../core/i18n.js';
-import { earnFor, tierFor, rewardIsLive, normalizePhone, toLatinDigits, parseAmount } from '../core/loyalty.js';
+import { earnFor, tierFor, rewardIsLive, normalizePhone, toLatinDigits, parseAmount, isStampy, stampState } from '../core/loyalty.js';
 import { esc, icon, $, avatar, fullName, showError, toast, modal, errText } from '../ui/ui.js';
 import { addCustomerDialog } from './biz-customers.js';
 import { evName } from './biz-common.js';
@@ -16,6 +16,12 @@ export default async function checkout(ctx, el, { params }) {
   const needsAmount = b.program.type === 'points' || b.program.type === 'spend';
   const needsQty = b.program.type === 'stamps';
   addEventListener('hashchange', stopScanner, { once: true });
+  const live = rewards.filter((x) => rewardIsLive(x));
+  const balHtml = (points) => {
+    if (!isStampy(b.program)) return `${fmtNum(points)} ${esc(unit)}`;
+    const s = stampState(b.program, live, points);
+    return `${fmtNum(s.progress)}/${fmtNum(s.goal)} ${esc(unit)}${s.ready ? ` · <b>${s.ready === 1 ? t('c_rewards_count_one') : t('c_rewards_count', { n: fmtNum(s.ready) })}</b>` : ''}`;
+  };
   // One delegated listener for every customer pick (suggestions, recent list).
   el.onclick = (e) => { const p = e.target.closest('[data-pick]'); if (p) pick(p.dataset.pick); };
 
@@ -114,7 +120,7 @@ export default async function checkout(ctx, el, { params }) {
     return `<section class="panel"><div class="panel-b stack">
       <div class="co-customer">${avatar(c)}<div style="min-width:0"><b style="font-size:1.1rem">${esc(fullName(c))}</b>
         <div class="small muted"><span class="ltr">${esc(c.phone)}</span> · ${tier && b.tiers.length > 1 ? `<span class="chip dot" style="--c:${esc(tier.color)};padding:0 8px">${esc(tierName(tier))}</span> · ` : ''}${c.lastVisitAt ? t('co_last_visit', { d: ago(c.lastVisitAt) }) : t('co_never')}</div></div>
-        <div class="bal"><b class="num">${fmtNum(c.points)}</b><span class="small muted">${esc(unit)}</span></div>
+        <div class="bal">${isStampy(b.program) ? `<b class="num">${fmtNum(stampState(b.program, live, c.points).progress)}<span class="small muted">/${fmtNum(stampState(b.program, live, c.points).goal)}</span></b><span class="small muted">${balHtml(c.points).split(' · ')[1] || esc(unit)}</span>` : `<b class="num">${fmtNum(c.points)}</b><span class="small muted">${esc(unit)}</span>`}</div>
         <button class="btn ghost icon sm" id="clear" aria-label="${t('close')}">${icon('x')}</button></div>
       ${needsAmount ? `<label class="field"><span>${t('co_amount')} (${esc(curLabel(b.currency))})</span>
         <input class="input huge" id="amount" inputmode="decimal" autocomplete="off" placeholder="0" autofocus></label>` : ''}
@@ -140,6 +146,7 @@ export default async function checkout(ctx, el, { params }) {
       if (needsAmount && !(parseAmount(amount) > 0)) { const a = $('#amount', el); a.setAttribute('aria-invalid', 'true'); a.focus(); toast(t('err_invalid-amount'), 'bad'); btn.disabled = false; return; }
       const r = await ctx.S.recordPurchase(ctx.bid, { customerId: st.customer.id, amount: parseAmount(amount) || 0, qty, locationId: st.location });
       ctx.patchCustomer(r.customer);
+      if (isStampy(b.program)) r.earnedRewards = stampState(b.program, live, r.balance).ready - stampState(b.program, live, r.balance - r.earned).ready;
       st.result = r; st.customer = r.customer; st.resultAt = Date.now(); render();
     } catch (e) { showError(e); btn.disabled = false; }
   }
@@ -160,12 +167,36 @@ export default async function checkout(ctx, el, { params }) {
     return `<section class="panel"><div class="co-result" aria-live="polite">
       <div class="burst num">+${fmtNum(r.earned)}</div>
       <h2>${esc(fullName(c))}</h2>
-      <p class="muted">${t('co_balance', { n: fmtNum(r.balance) })} ${esc(unit)}</p>
-      ${r.unlocked.map((u) => `<div class="unlock">${icon('gift')} ${t('co_unlocked', { r: esc(rewardName(u)) })}</div>`).join('')}
+      <p class="muted">${t('co_balance', { n: balHtml(r.balance) })}</p>
+      ${isStampy(b.program) && r.earnedRewards ? `<div class="unlock">${icon('gift')} ${t('co_new_reward', { n: fmtNum(r.earnedRewards) })}</div>` : ''}
       ${r.tierUp ? `<div class="unlock">${icon('star')} ${t('co_tierup', { t: esc(tierName(r.tierUp)) })}</div>` : ''}
+      ${giveBlock()}
       <button class="btn primary xl" id="next" style="margin-top:10px" autofocus>${t('co_new_sale')}</button>
       <a href="#/customer/${c.id}" class="small">${lang === 'ar' ? 'افتح ملف الزبون' : 'Open customer profile'}</a>
     </div></section>`;
+  }
+
+  // Rewards the customer can take right now (just unlocked or already saved up).
+  // Giving one here redeems it immediately: stamps/points come off and any extra carry over.
+  function giveBlock() {
+    const r = st.result;
+    const given = r.given ? `<div class="unlock" style="background:var(--ok-tint);color:var(--ok)">${icon('check')} ${t('co_given_short', { r: esc(r.given.name) })}</div>` : '';
+    const can = live.filter((x) => r.balance >= x.cost).sort((a, b) => a.cost - b.cost);
+    if (!can.length) return given;
+    return `${given}<div class="stack" style="gap:8px;width:100%;max-width:420px">
+      ${r.given ? '' : `<div class="unlock">${icon('gift')} ${t('co_reward_ready', { r: esc(rewardName(can[0])) })}</div>`}
+      ${can.map((x, i) => `<button class="btn ${i === 0 ? 'primary' : ''} lg block" data-give="${x.id}">${icon('gift')}${t('co_give_now', { r: esc(rewardName(x)) })}</button>`).join('')}
+      <span class="small muted">${t('co_give_later')}</span></div>`;
+  }
+  async function giveNow(rewardId, btn) {
+    btn.disabled = true;
+    try {
+      const x = rewards.find((y) => y.id === rewardId);
+      const res = await ctx.S.redeemForCustomer(ctx.bid, st.customer.id, rewardId);
+      ctx.patchCustomer(res.customer); st.customer = { ...st.customer, ...res.customer };
+      st.result = { ...st.result, balance: res.balance, given: { name: rewardName(x), balance: res.balance } };
+      st.resultAt = Date.now(); render();
+    } catch (e) { showError(e); btn.disabled = false; }
   }
 
   // ── Reward code ──────────────────────────────────────
@@ -193,7 +224,7 @@ export default async function checkout(ctx, el, { params }) {
     try {
       const r = await ctx.S.redeemCode(ctx.bid, input.value);
       ctx.patchCustomer(r.customer);
-      out.innerHTML = `<div class="co-result"><div class="burst" style="background:var(--saffron)">${icon('check')}</div><h2>${esc(evName(r))}</h2><p class="muted">${esc(fullName(r.customer))} · ${t('co_balance', { n: fmtNum(r.balance) })}</p></div>`;
+      out.innerHTML = `<div class="co-result"><div class="burst" style="background:var(--saffron)">${icon('check')}</div><h2>${esc(evName(r))}</h2><p class="muted">${esc(fullName(r.customer))} · ${t('co_balance', { n: balHtml(r.balance) })}</p></div>`;
       input.value = ''; loadPending();
     } catch (e) {
       out.innerHTML = `<div class="note" style="background:var(--danger-tint);color:var(--danger)">${icon('x')}<span>${esc(errText(e))}${e.redeemedAt ? ' ' + fmtDate(e.redeemedAt, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''}</span></div>`;
@@ -221,6 +252,7 @@ export default async function checkout(ctx, el, { params }) {
     el.querySelectorAll('[data-q]').forEach((x) => (x.onclick = () => { qty.value = Math.max(1, Number(qty.value || 1) + Number(x.dataset.q)); $('#will', el).innerHTML = willText(); }));
     $('#complete', el)?.addEventListener('click', complete);
     el.querySelectorAll('[data-redeem]').forEach((x) => (x.onclick = () => redeemNow(x.dataset.redeem)));
+    el.querySelectorAll('[data-give]').forEach((x) => (x.onclick = () => giveNow(x.dataset.give, x)));
     const next = $('#next', el);
     // Ignore the tail of the Enter that completed the sale, so it can't skip the result screen.
     if (next) { next.focus(); next.onclick = () => { if (Date.now() - (st.resultAt || 0) < 700) return; st.result = null; st.customer = null; render(); }; }

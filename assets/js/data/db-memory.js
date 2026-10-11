@@ -7,15 +7,12 @@ const INC = Symbol('inc');
 export function createMemoryDB() {
   let docs = {};
   try { docs = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { docs = {}; }
-  let timer = null;
-  const persist = () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      try { localStorage.setItem(KEY, JSON.stringify(docs)); }
-      catch (e) { console.warn('Demo storage full', e); }
-    }, 60);
-  };
-  const flush = () => { clearTimeout(timer); try { localStorage.setItem(KEY, JSON.stringify(docs)); } catch {} };
+  // Only a tab that changed something writes back, so a tab that is just viewing
+  // (e.g. the customer card) can never overwrite newer data from the cashier tab.
+  let timer = null; let dirty = false;
+  const write = () => { if (!dirty) return; dirty = false; try { localStorage.setItem(KEY, JSON.stringify(docs)); } catch (e) { console.warn('Demo storage full', e); } };
+  const persist = () => { dirty = true; clearTimeout(timer); timer = setTimeout(write, 60); };
+  const flush = () => { clearTimeout(timer); write(); };
   addEventListener('pagehide', flush);
   // Another tab (e.g. the cashier) wrote to the demo store — pick it up.
   addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { docs = JSON.parse(e.newValue); } catch {} } });
@@ -107,7 +104,7 @@ export function createMemoryDB() {
     },
     // Demo-only helpers
     isEmpty: () => Object.keys(docs).length === 0,
-    loadRaw(map) { docs = map; flush(); },
+    loadRaw(map) { docs = map; dirty = true; flush(); },
     reset() { docs = {}; localStorage.removeItem(KEY); },
     flush,
   };

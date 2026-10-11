@@ -151,3 +151,14 @@ test('the platform admin account cannot own a business', async () => {
   await S.signIn(DEMO_ACCOUNTS.admin.email, 'demo1234');
   await assert.rejects(S.createBusiness({ name: 'Admin Shop', type: 'retail' }), /admin-no-business/);
 });
+
+test('stamp cards count in rounds: progress resets, rewards stack, redeeming takes one off', () => {
+  const prog = { type: 'stamps', goal: 6 };
+  const rw = [{ id: 'p', cost: 6, active: true }];
+  assert.deepEqual(L.stampState(prog, rw, 5), { goal: 6, progress: 5, ready: 0, left: 1 });
+  assert.deepEqual(L.stampState(prog, rw, 6), { goal: 6, progress: 0, ready: 1, left: 6 });
+  assert.deepEqual(L.stampState(prog, rw, 13), { goal: 6, progress: 1, ready: 2, left: 5 });
+  assert.equal(L.readyCount(prog, rw, 13), 2);
+  assert.deepEqual(L.stampState(prog, rw, 13 - 6), { goal: 6, progress: 1, ready: 1, left: 5 });   // after redeeming one
+  assert.equal(L.readyCount({ type: 'points' }, [{ cost: 100, active: true }, { cost: 500, active: true }], 300), 1);
+});
