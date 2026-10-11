@@ -17,6 +17,8 @@ const brand = (b) => { document.querySelector('meta[name=theme-color]').content 
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 let installPrompt = null;
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; document.querySelector('[data-install]')?.removeAttribute('hidden'); });
 // Back-to-wallet button used in the card and join headers.
 const walletLink = () => `<a class="btn ghost sm icon" href="rewards.html" aria-label="${t('w_title')}" title="${t('w_title')}">${icon(lang === 'ar' ? 'chevron' : 'back')}</a>`;
@@ -242,14 +244,14 @@ async function walletPage() {
           <div class="wallet">${list.map(tile).join('')}</div>
           ${offline ? `<p class="tiny muted">${t('w_offline')}</p>` : ''}`
         : `<div class="empty" style="padding-top:48px">${icon('card')}<b style="color:var(--ink)">${t('w_empty_t')}</b><p>${t('w_empty_d')}</p></div>`}
-        <div class="note">${icon('info')}<span>${t('w_install')}</span></div>
-        <button class="btn block" data-install ${installPrompt ? '' : 'hidden'}>${icon('dl')}${t('w_install_btn')}</button>
+        ${standalone ? '' : `<div class="note">${icon('info')}<span>${isIOS ? t('w_install_ios') : t('w_install')}</span></div>
+        <button class="btn block" data-install ${installPrompt ? '' : 'hidden'}>${icon('dl')}${t('w_install_btn')}</button>`}
         ${list.length ? `<p class="small muted">${t('w_lost')}</p>` : ''}
         <p class="tiny muted" style="text-align:center;margin-top:8px">${esc(appName())}</p>
       </main>`;
     $('#lang').onclick = () => { toggleLang(); draw(); };
     $('#edit')?.addEventListener('click', () => { editing = !editing; draw(); });
-    root.querySelector('[data-install]').onclick = async () => { if (installPrompt) { installPrompt.prompt(); installPrompt = null; draw(); } };
+    const ib = root.querySelector('[data-install]'); if (ib) ib.onclick = async () => { if (installPrompt) { installPrompt.prompt(); installPrompt = null; draw(); } };
     root.querySelectorAll('[data-remove]').forEach((x) => (x.onclick = async (ev) => {
       ev.preventDefault();
       const e = list.find((y) => y.token === x.dataset.remove);

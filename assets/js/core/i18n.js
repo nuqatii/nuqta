@@ -168,7 +168,8 @@ const en = {
   w_empty_d: 'Scan the QR code at a restaurant or shop to join. Every card you join collects here.',
   w_remove: 'Remove from this phone', w_remove_d: 'Your points stay safe at {biz}. Open your card link again to bring it back.',
   w_lost: 'Missing a card? Ask the cashier to send your card link on WhatsApp. Opening it puts the card back here.',
-  w_install: 'Add this page to your home screen to keep all your cards one tap away.', w_install_btn: 'Add to home screen',
+  w_install: 'Add this page to your home screen to keep all your cards one tap away.',
+  w_install_ios: 'To add it to your home screen: open this page in Safari, tap the Share button, then “Add to Home Screen”.', w_install_btn: 'Add to home screen',
 
   nav_billing: 'Subscription', plan_trial: 'Free trial', sub_subscribe: 'Subscribe', sub_renew: 'Renew',
   sub_trial_banner: 'Free trial: {n} days left.', sub_ending_banner: 'Your subscription ends in {n} days.',
@@ -353,7 +354,8 @@ const ar = {
   w_empty_d: 'امسح رمز QR في أي مطعم أو محل لتنضم. كل بطاقاتك تُجمع هنا.',
   w_remove: 'إزالة من هذا الموبايل', w_remove_d: 'نقاطك محفوظة عند {biz}. افتح رابط بطاقتك مجدداً لاستعادتها.',
   w_lost: 'بطاقة ناقصة؟ اطلب من الكاشير إرسال رابط بطاقتك على واتساب. بمجرد فتحه تعود البطاقة إلى هنا.',
-  w_install: 'أضف هذه الصفحة إلى الشاشة الرئيسية لتبقى كل بطاقاتك على بعد ضغطة.', w_install_btn: 'أضف إلى الشاشة الرئيسية',
+  w_install: 'أضف هذه الصفحة إلى الشاشة الرئيسية لتبقى كل بطاقاتك على بعد ضغطة.',
+  w_install_ios: 'لإضافتها إلى الشاشة الرئيسية: افتح الصفحة في Safari، اضغط زر المشاركة، ثم «إضافة إلى الشاشة الرئيسية».', w_install_btn: 'أضف إلى الشاشة الرئيسية',
 
   nav_billing: 'الاشتراك', plan_trial: 'تجربة مجانية', sub_subscribe: 'اشترك', sub_renew: 'جدّد',
   sub_trial_banner: 'تجربة مجانية: باقي {n} يوم.', sub_ending_banner: 'ينتهي اشتراكك خلال {n} يوم.',
