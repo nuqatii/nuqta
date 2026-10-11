@@ -47,10 +47,10 @@ async function join(slug) {
         <label class="field"><span>${t('first_name')}</span><input class="input" name="firstName" autocomplete="given-name" required maxlength="40" style="min-height:52px"></label>
         <label class="field"><span>${t('phone')}</span><input class="input" name="phone" type="tel" inputmode="tel" autocomplete="tel" required dir="ltr" placeholder="09XX XXX XXX" style="min-height:52px"></label>
         <label class="field"><span>${t('email')} <span class="muted">(${t('optional')})</span></span><input class="input" name="email" type="email" autocomplete="email" dir="ltr" style="min-height:52px"></label>
-        <label class="check"><input type="checkbox" name="consent" checked><span>${t('join_consent')}</span></label>
+        <label class="field"><span>${t('birthday')} <span class="muted">(${t('optional')})</span></span><input class="input" name="birthday" type="date" max="${new Date().toISOString().slice(0, 10)}" style="min-height:52px"><small>${t('join_bday_hint', { biz: esc(b.name) })}</small></label>
         <div id="err" role="alert"></div>
         <button class="btn primary xl" type="submit">${t('join_btn')}</button>
-        <p class="small muted" style="text-align:center">${t('join_privacy', { biz: esc(b.name) })}</p>
+        <p class="small muted" style="text-align:center">${t('join_privacy', { biz: esc(b.name) })} ${t('join_offers_note', { biz: esc(b.name) })}</p>
       </form>`}
     </div>`;
     $('#lang').onclick = () => { toggleLang(); draw(); };
@@ -59,7 +59,7 @@ async function join(slug) {
     f.onsubmit = async (e) => {
       e.preventDefault(); const btn = f.querySelector('[type=submit]'); btn.disabled = true; $('#err').innerHTML = '';
       try {
-        const r = await S.joinProgram(slug, { firstName: f.firstName.value, phone: f.phone.value, email: f.email.value, marketingConsent: f.consent.checked });
+        const r = await S.joinProgram(slug, { firstName: f.firstName.value, phone: f.phone.value, email: f.email.value, birthday: f.birthday.value, marketingConsent: true });
         wallet.save(r.cardToken, b.id, null);
         location.replace(`rewards.html?c=${r.cardToken}&welcome=1`);
       } catch (err) {

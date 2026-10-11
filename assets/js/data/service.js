@@ -196,7 +196,7 @@ export function createService({ db, auth, mode }) {
         const memberNumber = L.memberNumber(seq);
         const customer = {
           firstName, lastName: L.clampStr(data.lastName, 40), phone, email,
-          birthday: data.birthday || '', gender: data.gender || '', notes: '',
+          birthday: /^\d{4}-\d{2}-\d{2}$/.test(data.birthday || '') ? data.birthday : '', gender: data.gender || '', notes: '',
           marketingConsent: !!data.marketingConsent, preferredChannel: data.preferredChannel || 'whatsapp',
           memberNumber, cardToken: token, scanId, businessId: bid,
           joinedAt: t, lastVisitAt: null, visits: 0, spend: 0, points: bonus, lifetimePoints: bonus,
