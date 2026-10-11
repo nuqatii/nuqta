@@ -98,3 +98,50 @@ test('invited staff claims their role on sign-up', async () => {
   const ms = await S.myMemberships();
   assert.equal(ms[0]?.role, 'staff');
 });
+
+test('subscription states: trial → grace → expired → paid', () => {
+  const now = Date.UTC(2026, 9, 11);
+  const b = { status: 'active', createdAt: now - 10 * L.DAY, trialEndsAt: now + 20 * L.DAY, paidUntil: null };
+  assert.equal(L.accessState(b, now).state, 'trial');
+  assert.equal(L.accessState(b, now).daysLeft, 20);
+  assert.equal(L.accessState(b, now + 21 * L.DAY).state, 'grace');
+  assert.equal(L.canOperate(b, now + 22 * L.DAY), true);
+  assert.equal(L.accessState(b, now + 24 * L.DAY).state, 'expired');
+  // Paying during the trial adds the months after the trial ends.
+  const paid = { ...b, paidUntil: L.extendPaid(b, 1, now) };
+  assert.ok(paid.paidUntil > b.trialEndsAt + 27 * L.DAY);
+  assert.equal(L.accessState(paid, now + 40 * L.DAY).state, 'active');
+  // Paying after expiry starts from today.
+  const late = now + 60 * L.DAY;
+  assert.ok(L.extendPaid(b, 1, late) - late < 32 * L.DAY);
+  assert.equal(L.accessState({ ...b, status: 'suspended' }, now).state, 'suspended');
+  // Legacy business without trialEndsAt gets the default trial from createdAt.
+  assert.equal(L.accessState({ status: 'active', createdAt: now }, now + 29 * L.DAY).state, 'trial');
+});
+
+test('expired business is locked; admin payment unlocks it', async () => {
+  await S.signOut();
+  await S.signIn(DEMO_ACCOUNTS.admin.email, 'demo1234');
+  const list = await S.adminListBusinesses();
+  const rose = list.find((b) => b.slug === 'rosesalon');
+  assert.equal(L.accessState(rose).state, 'expired');
+  await assert.rejects(S.joinProgram('rosesalon', { firstName: 'Nour', phone: '0933 222 111' }), /subscription-ended/);
+  await S.adminMarkPaid(rose.id, { months: 1, plan: 'starter', amount: 15, currency: 'USD', method: 'Cash' });
+  assert.equal(L.accessState(await S.getBusiness(rose.id)).state, 'active');
+  const j = await S.joinProgram('rosesalon', { firstName: 'Nour', phone: '0933 222 111' });
+  assert.ok(j.cardToken);
+  assert.equal((await S.listPayments(rose.id)).length, 1);
+  const uc = list.find((b) => b.slug === 'urbancoffee');
+  const before = (await S.getBusiness(uc.id)).trialEndsAt;
+  await S.adminExtendTrial(uc.id, 14);
+  assert.equal((await S.getBusiness(uc.id)).trialEndsAt, before + 14 * L.DAY);
+});
+
+test('new businesses start on the platform trial length', async () => {
+  await S.signOut();
+  await S.signUp('trial@shop.test', 'secret1', 'T');
+  const b = await S.createBusiness({ name: 'Trial Shop', type: 'retail' });
+  assert.equal(b.plan, 'trial');
+  assert.equal(L.accessState(b).state, 'trial');
+  assert.equal(L.accessState(b).daysLeft, 30);
+});

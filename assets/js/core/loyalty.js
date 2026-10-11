@@ -9,12 +9,46 @@ export const CHANNELS = ['whatsapp', 'sms', 'email', 'push'];
 
 // What each role may open. Mirrored server-side in firestore.rules.
 export const PERMISSIONS = {
-  owner:     ['dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'designer', 'crm', 'campaigns', 'analytics', 'locations', 'staff', 'settings', 'qr'],
+  owner:     ['billing', 'dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'designer', 'crm', 'campaigns', 'analytics', 'locations', 'staff', 'settings', 'qr'],
   manager:   ['dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'crm', 'analytics', 'locations', 'qr'],
   staff:     ['checkout', 'customers', 'transactions'],
   marketing: ['dashboard', 'customers', 'crm', 'campaigns', 'analytics', 'qr'],
 };
 export const can = (role, area) => !!PERMISSIONS[role]?.includes(area);
+
+// ── Subscription ────────────────────────────────────────
+// A business runs on a free trial, then on paid time that the platform admin adds.
+// Keep GRACE_DAYS / DEFAULT_TRIAL_DAYS in sync with firestore.rules.
+export const PLANS = ['trial', 'starter', 'professional', 'enterprise'];
+export const PAID_PLANS = ['starter', 'professional', 'enterprise'];
+export const GRACE_DAYS = 3;
+export const DEFAULT_TRIAL_DAYS = 30;
+export const trialEnd = (b) => b?.trialEndsAt ?? ((b?.createdAt || Date.now()) + DEFAULT_TRIAL_DAYS * DAY);
+//   trial     → inside the free trial
+//   active    → paid time remaining
+//   grace     → trial/subscription ended less than GRACE_DAYS ago: everything still works, with warnings
+//   expired   → locked: no new points, joins or redemptions; dashboard shows only the Subscription page
+//   suspended → paused by the platform admin
+export function accessState(b, now = Date.now()) {
+  if (!b) return { state: 'expired', endsAt: 0, daysLeft: 0 };
+  if (b.status === 'suspended') return { state: 'suspended', endsAt: 0, daysLeft: 0 };
+  const tEnd = trialEnd(b); const paid = b.paidUntil || 0;
+  const end = Math.max(tEnd, paid);
+  const days = (ms) => Math.max(0, Math.ceil((ms - now) / DAY));
+  if (paid > now) return { state: 'active', endsAt: paid, daysLeft: days(paid) };
+  if (tEnd > now) return { state: 'trial', endsAt: tEnd, daysLeft: days(tEnd) };
+  const lockAt = end + GRACE_DAYS * DAY;
+  if (now < lockAt) return { state: 'grace', endsAt: end, lockAt, daysLeft: days(lockAt) };
+  return { state: 'expired', endsAt: end, daysLeft: 0 };
+}
+export const canOperate = (b, now) => ['trial', 'active', 'grace'].includes(accessState(b, now).state);
+// New paid time starts after whatever the business already has (trial or earlier payment).
+export function extendPaid(b, months, now = Date.now()) {
+  const start = new Date(Math.max(now, b?.paidUntil || 0, trialEnd(b)));
+  const end = new Date(start); end.setMonth(end.getMonth() + months);
+  return end.getTime();
+}
+export const extendTrial = (b, days, now = Date.now()) => Math.max(now, trialEnd(b)) + days * DAY;
 
 // ── Programs ────────────────────────────────────────────────
 // Every program type is stored as a single integer balance ("units"):

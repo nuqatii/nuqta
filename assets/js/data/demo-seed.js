@@ -35,7 +35,8 @@ export async function seedDemo(db, auth) {
 
   for (const a of Object.values(DEMO_ACCOUNTS)) await auth._createUser(a.email, a.password, a.name, a.uid);
   set(`platformAdmins/${DEMO_ACCOUNTS.admin.uid}`, { email: DEMO_ACCOUNTS.admin.email, at: NOW });
-  set('platform/settings', { signupsOpen: true, announcement: '' });
+  set('platform/settings', { signupsOpen: true, announcement: '', trialDays: 30, currency: 'USD', prices: { starter: 15, professional: 30, enterprise: 60 },
+    paymentInfo: 'Sham Cash / Syriatel Cash: 0944 000 000\nBank transfer: ask us for the details\nOr pay in cash at our office in Mezzeh.', supportWhatsapp: '+963944000000' });
 
   // ── Joe's Pizza ───────────────────────────────────────
   const bid = 'joespizza01';
@@ -118,11 +119,15 @@ export async function seedDemo(db, auth) {
     program, tiers,
     design: { style: 'gradient', layout: 'classic', programName: "Joe's Rewards", programNameAr: 'مكافآت جوز', cover: null, icon: 'pizza', codeFormat: 'qr' },
     status: 'active', plan: 'starter', ownerUid: DEMO_ACCOUNTS.owner.uid, createdAt: NOW - 190 * DAY,
+    trialEndsAt: NOW - 160 * DAY, paidUntil: NOW + 20 * DAY,
     memberSeq: customers.length, designVersion: 3,
   });
   set(`stats/${bid}`, { businessId: bid, statCustomers: customers.length, statTxns: stats.txns, statRevenue: stats.revenue, statPoints: stats.points, statRedeemed: stats.redeemed, lastActivityAt: NOW - 3600000 });
   set('slugs/joespizza', { businessId: bid });
-  set(`businesses/${bid}/private/settings`, { ownerEmail: DEMO_ACCOUNTS.owner.email, subscription: { plan: 'starter', status: 'active', since: NOW - 190 * DAY }, limits: {} });
+  set(`businesses/${bid}/private/settings`, { ownerEmail: DEMO_ACCOUNTS.owner.email, limits: {} });
+  for (const [i, ago] of [[0, 160], [1, 100], [2, 40]].map(([i, d]) => [i, d])) {
+    set(`businesses/${bid}/payments/pay${i}`, { months: 2, plan: 'starter', amount: 30, currency: 'USD', method: 'Sham Cash', note: '', periodEnd: NOW - ago * DAY + 60 * DAY, at: NOW - ago * DAY, by: DEMO_ACCOUNTS.admin.email });
+  }
   const roles = { owner: 'owner', manager: 'manager', staff: 'staff', marketing: 'marketing' };
   for (const [k, role] of Object.entries(roles)) {
     const a = DEMO_ACCOUNTS[k];
@@ -160,7 +165,8 @@ export async function seedDemo(db, auth) {
     colors: { primary: '#1F3A33', secondary: '#E9DCC4', bg: '#1F3A33', text: '#F5EFE3' },
     program: { type: 'stamps', per: 0, earn: 1, goal: 9, welcomeBonus: 0 }, tiers: [{ id: 'regular', name: 'Regular', nameAr: 'دائم', min: 0, color: '#1F3A33', benefits: '' }],
     design: { style: 'solid', layout: 'stamps', programName: 'Coffee Club', programNameAr: 'نادي القهوة', cover: null, icon: 'coffee', codeFormat: 'qr' },
-    status: 'active', plan: 'free', ownerUid: DEMO_ACCOUNTS.other.uid, createdAt: NOW - 40 * DAY,
+    status: 'active', plan: 'trial', ownerUid: DEMO_ACCOUNTS.other.uid, createdAt: NOW - 25 * DAY,
+    trialEndsAt: NOW + 5 * DAY, paidUntil: null,
     memberSeq: 18, designVersion: 1,
   });
   set(`stats/${ub}`, { businessId: ub, statCustomers: 18, statTxns: 77, statRevenue: 23100, statPoints: 77, statRedeemed: 4, lastActivityAt: NOW - 2 * DAY });
@@ -177,6 +183,17 @@ export async function seedDemo(db, auth) {
     set(`businesses/${ub}/phones/${ph}`, { at: j });
     set(`cards/${tok}`, { businessId: ub, customerId: id, memberNumber: L.memberNumber(i + 1), passId: `${ub}.${i + 1}`, qrValue: scan, barcodeValue: L.memberNumber(i + 1), walletStatus: 'none', joinedAt: j, points: st, lifetimePoints: st, visits: st, tierId: 'regular', firstName: fn, updatedAt: NOW, profile: { lastName: '', email: '', birthday: '', marketingConsent: true, preferredChannel: 'whatsapp' } });
   }
+
+  // A third tenant whose trial ran out — shows the locked state in the admin console.
+  set('businesses/rosesalon01', {
+    name: 'Rose Salon', slug: 'rosesalon', type: 'salon', currency: 'SYP', lang: 'ar', logo: null,
+    colors: { primary: '#C2185B', secondary: '#FFD1DC', bg: '#C2185B', text: '#FFFFFF' }, program: { type: 'visits', per: 0, earn: 1, goal: 8, welcomeBonus: 0 },
+    tiers: [{ id: 'regular', name: 'Regular', nameAr: 'دائم', min: 0, color: '#C2185B', benefits: '' }],
+    design: { style: 'gradient', layout: 'stamps', programName: 'Rose Club', programNameAr: 'نادي روز', cover: null, icon: 'scissors', codeFormat: 'qr' },
+    status: 'active', plan: 'trial', ownerUid: 'u_rose', createdAt: NOW - 45 * DAY, trialEndsAt: NOW - 15 * DAY, paidUntil: null, memberSeq: 6, designVersion: 1,
+  });
+  set('slugs/rosesalon', { businessId: 'rosesalon01' });
+  set('stats/rosesalon01', { businessId: 'rosesalon01', statCustomers: 6, statTxns: 14, statRevenue: 9800, statPoints: 14, statRedeemed: 0, lastActivityAt: NOW - 16 * DAY });
 
   await db.batch(ops);
   db.flush?.();

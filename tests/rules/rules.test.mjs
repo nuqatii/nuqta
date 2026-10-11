@@ -17,11 +17,14 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore(); const b = writeBatch(db);
-    const biz = (owner, status = 'active') => ({ name: 'B', slug: 's', ownerUid: owner, status, plan: 'free', memberSeq: 1, program: { type: 'points', per: 10, earn: 1, welcomeBonus: 50 }, tiers: [] });
+    const biz = (owner, status = 'active', trialEndsAt = Date.now() + 10 * 86400000) => ({ name: 'B', slug: 's', ownerUid: owner, status, plan: 'trial', trialEndsAt, paidUntil: null, createdAt: Date.now(), memberSeq: 1, program: { type: 'points', per: 10, earn: 1, welcomeBonus: 50 }, tiers: [] });
     b.set(doc(db, 'platformAdmins', ADMIN), { at: 1 });
     b.set(doc(db, 'platform/settings'), { signupsOpen: true });
     b.set(doc(db, 'businesses', BID), biz(JOE));
     b.set(doc(db, 'businesses', OBID), biz(OTHER));
+    b.set(doc(db, 'businesses', 'expired01'), biz('x', 'active', Date.now() - 10 * 86400000));
+    b.set(doc(db, 'businesses/expired01/members/' + CASHIER), { uid: CASHIER, role: 'staff', businessId: 'expired01' });
+    b.set(doc(db, 'businesses/expired01/customers/c1'), { firstName: 'A', phone: '+9639', points: 0, lifetimePoints: 0, cardToken: 'expTok0123456789abcdefgh', businessId: 'expired01' });
     b.set(doc(db, 'stats', BID), { statCustomers: 1, statRevenue: 1000 });
     for (const [uid, role] of [[JOE, 'owner'], [CASHIER, 'staff'], [MKT, 'marketing']]) b.set(doc(db, `businesses/${BID}/members/${uid}`), { uid, role, businessId: BID });
     b.set(doc(db, `businesses/${OBID}/members/${OTHER}`), { uid: OTHER, role: 'owner', businessId: OBID });
@@ -104,4 +107,18 @@ test('platform admin lists businesses; owners cannot', async () => {
 test('memberships are discoverable only by their own user', async () => {
   await assertSucceeds(getDocs(query(collectionGroup(as(CASHIER), 'members'), where('uid', '==', CASHIER))));
   await assertFails(getDocs(query(collectionGroup(as(CASHIER), 'members'), where('uid', '==', JOE))));
+});
+
+test('an expired business cannot add points; owners cannot extend their own trial; admin can', async () => {
+  await assertFails(updateDoc(doc(as(CASHIER), 'businesses/expired01/customers/c1'), { points: 100, lifetimePoints: 100 }));
+  await assertFails(updateDoc(doc(as(JOE), `businesses/${BID}`), { trialEndsAt: Date.now() + 999 * 86400000 }));
+  await assertFails(updateDoc(doc(as(JOE), `businesses/${BID}`), { paidUntil: Date.now() + 999 * 86400000 }));
+  await assertSucceeds(updateDoc(doc(as(ADMIN), 'businesses/expired01'), { paidUntil: Date.now() + 30 * 86400000, plan: 'starter' }));
+  await assertSucceeds(updateDoc(doc(as(CASHIER), 'businesses/expired01/customers/c1'), { points: 100, lifetimePoints: 100 }));
+});
+test('a new business must start on a normal trial', async () => {
+  const mk = (data) => setDoc(doc(as('newowner'), 'businesses/newbiz'), { name: 'N', ownerUid: 'newowner', status: 'active', plan: 'trial', memberSeq: 0, paidUntil: null, trialEndsAt: Date.now() + 30 * 86400000, ...data });
+  await assertFails(mk({ trialEndsAt: Date.now() + 400 * 86400000 }));
+  await assertFails(mk({ paidUntil: Date.now() + 400 * 86400000 }));
+  await assertSucceeds(mk({}));
 });

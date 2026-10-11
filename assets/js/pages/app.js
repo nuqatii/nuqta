@@ -1,7 +1,7 @@
 // Business portal shell: auth gate, business picker, role-aware nav, hash router.
 import { getService } from '../data/index.js';
 import { t, setLang, lang, appName } from '../core/i18n.js';
-import { can, DAY } from '../core/loyalty.js';
+import { can, DAY, accessState } from '../core/loyalty.js';
 import { esc, icon, $, modal, showError, confirmBox } from '../ui/ui.js';
 
 const S = await getService();
@@ -16,7 +16,7 @@ const NAV = [
     { id: 'rewards', icon: 'gift' }, { id: 'crm', icon: 'pie' }, { id: 'campaigns', icon: 'send' }, { id: 'analytics', icon: 'chart' }, { id: 'qr', icon: 'qr' },
   ] },
   { group: 'nav_group_setup', items: [
-    { id: 'program', icon: 'sliders' }, { id: 'designer', icon: 'palette' }, { id: 'locations', icon: 'pin' }, { id: 'staff', icon: 'team' }, { id: 'settings', icon: 'gear' },
+    { id: 'program', icon: 'sliders' }, { id: 'designer', icon: 'palette' }, { id: 'locations', icon: 'pin' }, { id: 'staff', icon: 'team' }, { id: 'settings', icon: 'gear' }, { id: 'billing', icon: 'card' },
   ] },
 ];
 const PAGES = {
@@ -27,12 +27,14 @@ const PAGES = {
   crm: () => import('./biz-crm.js'), campaigns: () => import('./biz-campaigns.js'),
   analytics: () => import('./biz-analytics.js'), locations: () => import('./biz-team.js'), staff: () => import('./biz-team.js'),
   settings: () => import('./biz-settings.js'), qr: () => import('./biz-settings.js'),
+  billing: () => import('./biz-billing.js'),
 };
 const AREA = { customer: 'customers' };
 
 // ── Context shared by every page ─────────────────────────
 const ctx = {
-  S, user: S.auth.current(), bid: null, role: null, biz: null, memberships: [],
+  S, user: S.auth.current(), bid: null, role: null, biz: null, memberships: [], platform: null,
+  access() { return accessState(this.biz); },
   _customers: null, _activity: null,
   async customers(force) { if (force || !this._customers) this._customers = await S.listCustomers(this.bid); return this._customers; },
   async activity(force) {
@@ -51,6 +53,7 @@ const ctx = {
 
 async function boot() {
   if (!ctx.user) return location.replace('index.html?next=app.html');
+  ctx.platform = await S.platformSettings().catch(() => null);
   ctx.memberships = await S.myMemberships();
   if (!ctx.memberships.length) {
     const ob = await import('./biz-onboarding.js');
@@ -85,6 +88,20 @@ function bizButton(cls = '') {
   </button>`;
 }
 
+// Trial / grace / renewal warning and the platform announcement, above every page.
+function subBanner() {
+  const a = ctx.access(); const owner = ctx.role === 'owner';
+  const btn = (label) => (owner ? `<a class="btn sm" href="#/billing">${label}</a>` : '');
+  let html = '';
+  if (a.state === 'trial') html = `<div class="sub-bar ${a.daysLeft <= 7 ? 'warn' : ''}">${icon('clock')}<span>${t('sub_trial_banner', { n: a.daysLeft })}</span>${btn(t('sub_subscribe'))}</div>`;
+  else if (a.state === 'active' && a.daysLeft <= 7) html = `<div class="sub-bar warn">${icon('clock')}<span>${t('sub_ending_banner', { n: a.daysLeft })}</span>${btn(t('sub_renew'))}</div>`;
+  else if (a.state === 'grace') html = `<div class="sub-bar bad">${icon('info')}<span>${t(ctx.biz.paidUntil ? 'sub_grace_paid' : 'sub_grace_trial', { n: a.daysLeft })}</span>${btn(t(ctx.biz.paidUntil ? 'sub_renew' : 'sub_subscribe'))}</div>`;
+  const ann = ctx.platform?.announcement;
+  if (ann) html += `<div class="sub-bar info">${icon('info')}<span>${esc(ann)}</span></div>`;
+  return html;
+}
+const locked = () => ['expired', 'suspended'].includes(ctx.access().state);
+
 function renderChrome() {
   const cur = currentId();
   const curNav = cur === 'customer' ? 'customers' : cur;
@@ -116,6 +133,7 @@ function renderChrome() {
     </aside>
     <div class="main">
       <header class="topbar">${bizButton()}<button class="btn ghost icon" data-lang aria-label="${t('switch_lang')}">${icon('globe')}</button></header>
+      ${subBanner()}
       <main id="page" class="page" tabindex="-1"></main>
     </div>
   </div>
@@ -158,7 +176,17 @@ let routeSeq = 0;
 async function route() {
   if (!ctx.biz) return;
   const [id, ...params] = location.hash.replace(/^#\/?/, '').split('?')[0].split('/');
-  const page = id || defaultPage();
+  let page = id || defaultPage();
+  // Soft lock: once the trial/subscription has ended (after grace), the owner only sees the
+  // Subscription page and other roles see a notice. Data stays untouched.
+  if (locked()) {
+    if (ctx.role === 'owner') { if (page !== 'billing') return ctx.nav('billing'); }
+    else {
+      const el = $('#page');
+      el.innerHTML = `<div class="empty" style="padding-top:64px">${icon('info')}<h2 style="color:var(--ink)">${t('sub_locked_t')}</h2><p>${ctx.access().state === 'suspended' ? t('err_business-suspended') : t('sub_locked_staff')}</p></div>`;
+      return;
+    }
+  }
   const area = AREA[page] || page;
   if (!PAGES[page] || !ctx.can(area)) return ctx.nav(defaultPage());
   const seq = ++routeSeq;

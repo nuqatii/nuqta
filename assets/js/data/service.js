@@ -89,6 +89,7 @@ export function createService({ db, auth, mode }) {
       const name = L.clampStr(input.name, 60); if (!name) fail('invalid-name');
       const platform = await db.get('platform/settings');
       if (platform && platform.signupsOpen === false) fail('signups-closed');
+      const trialDays = Math.min(365, Math.max(1, Number(platform?.trialDays) || L.DEFAULT_TRIAL_DAYS));
       let slug = L.slugify(input.slug || name);
       for (let i = 0; !(await S.slugAvailable(slug)); i++) slug = L.slugify(name).slice(0, 24) + '-' + L.randomString(3);
       const bid = db.newId();
@@ -102,7 +103,7 @@ export function createService({ db, auth, mode }) {
         program,
         design: { style: 'gradient', layout: 'classic', programName: input.programName || '', cover: null, icon: 'star', codeFormat: 'qr', ...(input.design || {}) },
         tiers: input.tiers || L.defaultTiers(),
-        status: 'active', plan: 'free', ownerUid: u.uid, createdAt: now(),
+        status: 'active', plan: 'trial', trialEndsAt: now() + trialDays * L.DAY, paidUntil: null, ownerUid: u.uid, createdAt: now(),
         memberSeq: 0, designVersion: 1,
       };
       await db.batch([
@@ -110,7 +111,7 @@ export function createService({ db, auth, mode }) {
         { op: 'set', path: P.sub(bid, 'members', u.uid), data: { uid: u.uid, email: u.email, name: u.name || '', role: 'owner', businessId: bid, createdAt: now() } },
         { op: 'set', path: P.slug(slug), data: { businessId: bid } },
         { op: 'set', path: P.stats(bid), data: { businessId: bid, statCustomers: 0, statTxns: 0, statRevenue: 0, statPoints: 0, statRedeemed: 0, lastActivityAt: now() } },
-        { op: 'set', path: P.sub(bid, 'private', 'settings'), data: { ownerEmail: u.email, subscription: { plan: 'free', status: 'active', since: now() }, limits: {} } },
+        { op: 'set', path: P.sub(bid, 'private', 'settings'), data: { ownerEmail: u.email, limits: {} } },
       ]);
       roleCache.set(bid + ':' + u.uid, 'owner');
       const ops = [];
@@ -189,7 +190,7 @@ export function createService({ db, auth, mode }) {
       return db.transaction(async (tx) => {
         const b = await tx.get(P.biz(bid));
         if (!b) fail('not-found');
-        if (b.status !== 'active') fail('business-suspended');
+        if (!L.canOperate(b)) fail(b.status === 'suspended' ? 'business-suspended' : 'subscription-ended');
         const seq = (b.memberSeq || 0) + 1;
         const bonus = Math.max(0, Number(b.program?.welcomeBonus) || 0);
         const tier = L.tierFor(b.tiers, bonus);
@@ -232,7 +233,7 @@ export function createService({ db, auth, mode }) {
         const b = await tx.get(P.biz(bid));
         const c = await tx.get(P.sub(bid, 'customers', customerId));
         if (!b || !c) fail('not-found');
-        if (b.status !== 'active') fail('business-suspended');
+        if (!L.canOperate(b)) fail(b.status === 'suspended' ? 'business-suspended' : 'subscription-ended');
         if (b.program.type !== 'visits' && b.program.type !== 'stamps' && amount <= 0) fail('invalid-amount');
         const t = now();
         const r = L.applyPurchase({ customer: c, program: b.program, tiers: b.tiers, rewards, amount, qty, now: t });
@@ -256,6 +257,7 @@ export function createService({ db, auth, mode }) {
       const u = user();
       return db.transaction(async (tx) => {
         const b = await tx.get(P.biz(bid));
+        if (!L.canOperate(b)) fail('subscription-ended');
         const c = await tx.get(P.sub(bid, 'customers', customerId)); if (!c) fail('not-found');
         const points = Math.max(0, (c.points || 0) + delta);
         const lifetime = (c.lifetimePoints || 0) + Math.max(0, delta);
@@ -308,6 +310,7 @@ export function createService({ db, auth, mode }) {
       if (code && !code.startsWith('R-')) code = 'R-' + code.replace(/^R/, '');
       const u = user();
       return db.transaction(async (tx) => {
+        if (!L.canOperate(await tx.get(P.biz(bid)))) fail('subscription-ended');
         const red = await tx.get(P.sub(bid, 'redemptions', code));
         if (!red) fail('code-not-found');
         if (red.status === 'redeemed') fail('code-used', { redeemedAt: red.redeemedAt });
@@ -323,6 +326,7 @@ export function createService({ db, auth, mode }) {
       await need(bid, 'checkout');
       const code = L.redemptionCode(); const u = user();
       return db.transaction(async (tx) => {
+        if (!L.canOperate(await tx.get(P.biz(bid)))) fail('subscription-ended');
         const c = await tx.get(P.sub(bid, 'customers', customerId));
         const rw = await tx.get(P.sub(bid, 'rewards', rewardId));
         if (!c || !rw) fail('not-found');
@@ -365,6 +369,7 @@ export function createService({ db, auth, mode }) {
     async requestRedemption(token, rewardId) {
       const card = await db.get(P.card(token)); if (!card) fail('not-found');
       const bid = card.businessId;
+      if (!L.canOperate(await S.getBusiness(bid))) fail('subscription-ended');
       const rw = await db.get(P.sub(bid, 'rewards', rewardId));
       if (!rw || !L.rewardIsLive(rw)) fail('reward-unavailable');
       if ((card.points || 0) < rw.cost) fail('insufficient-points');
@@ -437,6 +442,7 @@ export function createService({ db, auth, mode }) {
     // Sending integrations (WhatsApp API, SMS, email) plug in here later.
     async prepareCampaign(bid, id, customers, business) {
       await need(bid, 'campaigns');
+      if (!L.canOperate(business)) fail('subscription-ended');
       const camp = await db.get(P.sub(bid, 'campaigns', id));
       const ops = []; const out = [];
       for (const c of customers) {
@@ -473,13 +479,55 @@ export function createService({ db, auth, mode }) {
     },
     async adminSetPlan(bid, plan) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
-      if (!['free', 'starter', 'professional', 'enterprise'].includes(plan)) fail('invalid');
+      if (!L.PLANS.includes(plan)) fail('invalid');
       await db.update(P.biz(bid), { plan }); await audit(bid, 'admin.plan', { plan });
     },
-    async adminSettings() { return (await db.get('platform/settings')) || { signupsOpen: true, announcement: '' }; },
+    // Record a payment received (cash, Sham Cash, transfer…) and add paid time.
+    async adminMarkPaid(bid, { months, plan, amount, currency, method, note }) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      months = Math.trunc(Number(months)); if (!(months >= 1 && months <= 36)) fail('invalid');
+      if (!L.PAID_PLANS.includes(plan)) fail('invalid');
+      const b = await db.get(P.biz(bid)); if (!b) fail('not-found');
+      const paidUntil = L.extendPaid(b, months);
+      const u = user();
+      await db.batch([
+        { op: 'update', path: P.biz(bid), data: { paidUntil, plan } },
+        { op: 'set', path: P.sub(bid, 'payments', db.newId()), data: { months, plan, amount: Number(amount) || 0, currency: currency || 'USD', method: L.clampStr(method, 40), note: L.clampStr(note, 200), periodEnd: paidUntil, at: now(), by: u.email } },
+      ]);
+      await audit(bid, 'admin.paid', { months, plan, amount, paidUntil });
+      return paidUntil;
+    },
+    async adminExtendTrial(bid, days) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      days = Math.trunc(Number(days)); if (!(days >= 1 && days <= 365)) fail('invalid');
+      const b = await db.get(P.biz(bid)); if (!b) fail('not-found');
+      const trialEndsAt = L.extendTrial(b, days);
+      await db.update(P.biz(bid), { trialEndsAt }); await audit(bid, 'admin.trial', { days, trialEndsAt });
+      return trialEndsAt;
+    },
+    async listPayments(bid) {
+      if (!(await S.isPlatformAdmin())) await need(bid, 'billing');
+      return db.list(P.sub(bid, 'payments'), { orderBy: ['at', 'desc'] });
+    },
+    // Public platform settings: trial length, prices, how to pay, announcement.
+    async platformSettings() {
+      const s = (await db.get('platform/settings')) || {};
+      return {
+        signupsOpen: s.signupsOpen !== false, announcement: s.announcement || '', trialDays: s.trialDays || L.DEFAULT_TRIAL_DAYS,
+        currency: s.currency || 'USD', prices: { starter: 15, professional: 30, enterprise: 60, ...(s.prices || {}) },
+        paymentInfo: s.paymentInfo || '', supportWhatsapp: s.supportWhatsapp || '',
+      };
+    },
+    async adminSettings() { return S.platformSettings(); },
     async adminSaveSettings(s) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
-      await db.set('platform/settings', { signupsOpen: !!s.signupsOpen, announcement: L.clampStr(s.announcement, 300) });
+      const prices = {}; for (const p of L.PAID_PLANS) prices[p] = Math.max(0, Number(s.prices?.[p]) || 0);
+      await db.set('platform/settings', {
+        signupsOpen: !!s.signupsOpen, announcement: L.clampStr(s.announcement, 300),
+        trialDays: Math.min(365, Math.max(1, Math.trunc(Number(s.trialDays) || L.DEFAULT_TRIAL_DAYS))),
+        currency: L.clampStr(s.currency || 'USD', 6), prices,
+        paymentInfo: L.clampStr(s.paymentInfo, 1000), supportWhatsapp: L.clampStr(s.supportWhatsapp, 20),
+      });
     },
   };
   return S;

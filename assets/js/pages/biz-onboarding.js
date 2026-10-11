@@ -1,5 +1,6 @@
 // 7-step onboarding with a live card preview. Target: a non-technical owner done in < 10 minutes.
-import { t, lang, setLang, fmtMoney, unitWord, curLabel, appName } from '../core/i18n.js';
+import { t, lang, setLang, fmtMoney, unitWord, curLabel, appName, fmtDate } from '../core/i18n.js';
+import { accessState } from '../core/loyalty.js';
 import { BUSINESS_TYPES, PROGRAM_TYPES, defaultProgram, earnFor, defaultTiers } from '../core/loyalty.js';
 import { esc, icon, $, readImage, showError, qrSvg, copyText, CARD_ICONS } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
@@ -82,6 +83,15 @@ export default function onboarding(ctx, root, onDone) {
     return p.type === 'points' ? t('rule_points', { earn: p.earn, per: p.per, cur }) : p.type === 'spend' ? t('rule_spend', { per: p.per, cur }) : t('rule_' + p.type);
   };
 
+  // New sign-ups are closed by the platform: say so up front instead of after seven steps.
+  if (ctx.platform && ctx.platform.signupsOpen === false) {
+    root.className = 'center-load';
+    root.innerHTML = `<div class="empty" style="max-width:420px">${icon('info')}<h2 style="color:var(--ink)">${t('err_signups-closed')}</h2>
+      <button class="btn" id="out">${icon('out')}${t('nav_signout')}</button></div>`;
+    $('#out').onclick = async () => { await ctx.S.signOut(); location.replace('index.html'); };
+    return;
+  }
+
   function render() {
     root.className = '';
     root.innerHTML = `<div class="ob">
@@ -150,6 +160,7 @@ export default function onboarding(ctx, root, onDone) {
     root.innerHTML = `<div class="ob"><div class="ob-form" style="gap:18px">
       <div class="brandmark" style="padding:0"><span class="dot"></span>${esc(appName())}</div>
       <div class="stack" style="gap:6px"><h1>${t('ob_ready')}</h1><p class="muted">${t('ob_ready_sub')}</p></div>
+      <div class="note">${icon('clock')}<span>${t('ob_trial_note', { n: Math.round((b.trialEndsAt - b.createdAt) / 86400000), d: fmtDate(accessState(b).endsAt) })}</span></div>
       <div class="row wrap" style="align-items:flex-start;gap:20px">
         <div style="width:180px;background:#fff;padding:12px;border-radius:14px;border:1px solid var(--line)">${qrSvg(url)}</div>
         <div class="stack" style="gap:10px;flex:1;min-width:220px">

@@ -445,6 +445,20 @@ svg.i { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
 .av svg.i { width: 52%; height: 52%; }
 .unlock { display: inline-flex; align-items: center; gap: 8px; }
 
+/* ── Subscription banner ────────────────────────────── */
+.sub-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px clamp(16px, 3vw, 40px); background: var(--brand-tint); color: var(--brand-ink); font-size: .9rem; border-bottom: 1px solid var(--line); }
+.sub-bar svg { width: 18px; height: 18px; flex: none; }
+.sub-bar span { flex: 1; min-width: 180px; }
+.sub-bar.warn { background: var(--saffron-tint); color: #7A4F0C; }
+.sub-bar.bad { background: var(--danger-tint); color: var(--danger); }
+.sub-bar.info { background: var(--sunken); color: var(--ink-2); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sub-bar.warn { color: #F1C77E; } }
+.plan-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.plan { border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 16px; display: grid; gap: 4px; background: var(--surface); }
+.plan.cur { border-color: var(--brand); background: var(--brand-tint); }
+.plan .price { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.payinfo { white-space: pre-wrap; padding: 14px 16px; border-radius: var(--r-sm); background: var(--sunken); border: 1px dashed var(--line); line-height: 1.7; }
+
 /* ── My cards (customer wallet) ─────────────────────── */
 .wdot { width: 12px; height: 12px; border-radius: 50%; background: var(--saffron); box-shadow: 0 0 0 4px var(--saffron-tint); flex: none; margin-inline: 4px; }
 .wallet { display: grid; gap: 12px; }

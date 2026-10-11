@@ -102,6 +102,14 @@ Spec tables map onto this as: Users → Firebase Auth; StaffMembers → `members
 
 Staff are invited by email; when they sign up with that email they get the role automatically.
 
+### Free trials and subscriptions
+
+- Every new business starts on a free trial (length set in **Admin → Billing**, default 30 days).
+- Owners see a banner with days left, and a **Subscription** page with your plans, prices and payment instructions, plus a button to confirm payment to you on WhatsApp.
+- When the trial or paid time ends there are **3 grace days** (everything works, red warning). After that the program is **paused**: the owner only sees the Subscription page, staff see a notice, the join page says the program is paused, and customer cards open read-only. No data is deleted.
+- You record each payment in **Admin → Record payment** (plan, 1/3/6/12 months, amount, method). Paid months are added after any trial or paid time the business still has. **⋯** on a row lets you extend a trial, change the plan, see payment history, or pause the business.
+- Only the platform admin can change `trialEndsAt`, `paidUntil` and `plan`; the security rules enforce the lock server-side too.
+
 ### Ready for later
 
 - **Apple / Google Wallet** — every card has `passId`, `memberNumber`, `qrValue`, `barcodeValue`, `walletStatus`, and the business doc has `designVersion`. `walletFields()` in `ui/card.js` already maps a card to storeCard pass fields. Adding wallet = a Cloud Function that signs passes and re-pushes on `cards/{token}` updates.

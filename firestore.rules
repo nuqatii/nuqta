@@ -15,7 +15,19 @@ service cloud.firestore {
     function isAdmin() { return signedIn() && exists(/databases/$(db)/documents/platformAdmins/$(uid())); }
     function bizPath(bid) { return /databases/$(db)/documents/businesses/$(bid); }
     function biz(bid) { return get(bizPath(bid)).data; }
-    function bizActive(bid) { return biz(bid).status == 'active'; }
+    // Subscription: a business can operate while not suspended and inside its trial, paid time,
+    // or the grace period after either ends. Mirrors accessState() in assets/js/core/loyalty.js.
+    function nowMs() { return request.time.toMillis(); }
+    function GRACE_MS() { return 259200000; }          // 3 days
+    function DEFAULT_TRIAL_MS() { return 2592000000; } // 30 days
+    function live(b) {
+      return b.status == 'active' && (
+           (b.get('paidUntil', null) is number && b.paidUntil + GRACE_MS() > nowMs())
+        || (b.get('trialEndsAt', b.get('createdAt', 0) + DEFAULT_TRIAL_MS()) + GRACE_MS() > nowMs()));
+    }
+    function bizActive(bid) { return live(biz(bid)); }
+    function settingsPath() { return /databases/$(db)/documents/platform/settings; }
+    function maxTrialMs() { return (exists(settingsPath()) ? get(settingsPath()).data.get('trialDays', 30) : 30) * 86400000 + 86400000; }
     function memberDoc(bid) { return /databases/$(db)/documents/businesses/$(bid)/members/$(uid()); }
     function role(bid) { return signedIn() && exists(memberDoc(bid)) ? get(memberDoc(bid)).data.role : ''; }
     function hasRole(bid, roles) { return role(bid) in roles; }
@@ -56,14 +68,16 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if signedIn()
         && request.resource.data.ownerUid == uid()
-        && request.resource.data.status == 'active' && request.resource.data.plan == 'free'
+        && request.resource.data.status == 'active' && request.resource.data.plan == 'trial'
         && request.resource.data.memberSeq == 0
-        && get(/databases/$(db)/documents/platform/settings).data.get('signupsOpen', true) != false;
+        && request.resource.data.get('paidUntil', null) == null
+        && request.resource.data.trialEndsAt is number && request.resource.data.trialEndsAt <= nowMs() + maxTrialMs()
+        && (!exists(settingsPath()) || get(settingsPath()).data.get('signupsOpen', true) != false);
       allow update: if
            (owner(bid) && onlyChanged(['name', 'type', 'currency', 'lang', 'logo', 'colors', 'program', 'design', 'tiers', 'designVersion']))
         || (manages(bid) && onlyChanged(['program', 'tiers', 'designVersion']))
-        || (onlyChanged(['memberSeq']) && incBy1('memberSeq') && resource.data.status == 'active')   // public join
-        || (isAdmin() && onlyChanged(['status', 'plan']));
+        || (onlyChanged(['memberSeq']) && incBy1('memberSeq') && live(resource.data))   // public join
+        || (isAdmin() && onlyChanged(['status', 'plan', 'paidUntil', 'trialEndsAt']));     // only the platform admin changes billing
       allow delete: if false;
 
       match /members/{m} {
@@ -80,6 +94,12 @@ service cloud.firestore {
         allow read: if owner(bid) || (signedIn() && request.auth.token.email == email);
         allow create, update: if owner(bid) && request.resource.data.email == email && request.resource.data.role in ['manager', 'staff', 'marketing'];
         allow delete: if owner(bid) || (signedIn() && request.auth.token.email == email);
+      }
+      // Payments the platform admin recorded. Owners can see their billing history.
+      match /payments/{pid} {
+        allow read: if owner(bid) || isAdmin();
+        allow create: if isAdmin();
+        allow update, delete: if false;
       }
       match /private/{doc} {
         allow read, update: if owner(bid);
@@ -136,13 +156,13 @@ service cloud.firestore {
           let d = request.resource.data;
           let card = get(/databases/$(db)/documents/cards/$(d.cardToken)).data;
           let rw = get(/databases/$(db)/documents/businesses/$(bid)/rewards/$(d.rewardId)).data;
-          return d.status == 'pending' && d.source == 'customer' && card.businessId == bid && card.customerId == d.customerId
+          return bizActive(bid) && d.status == 'pending' && d.source == 'customer' && card.businessId == bid && card.customerId == d.customerId
             && rw.active == true && d.cost == rw.cost && card.points >= rw.cost && d.expiresAt <= request.time.toMillis() + 3 * 3600 * 1000;
         }
         allow read: if cashier(bid);
         allow create: if validCustomerRequest()
-          || (cashier(bid) && request.resource.data.status == 'redeemed' && request.resource.data.staffUid == uid());
-        allow update: if cashier(bid) && resource.data.status == 'pending' && request.resource.data.status == 'redeemed'
+          || (cashier(bid) && bizActive(bid) && request.resource.data.status == 'redeemed' && request.resource.data.staffUid == uid());
+        allow update: if cashier(bid) && bizActive(bid) && resource.data.status == 'pending' && request.resource.data.status == 'redeemed'
           && request.resource.data.staffUid == uid() && request.resource.data.cost == resource.data.cost;
         allow delete: if false;
       }

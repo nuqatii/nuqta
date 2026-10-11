@@ -1,7 +1,7 @@
 // Customer experience: join via QR (?b=slug) and the digital card app (?c=token). No login.
 import { getService } from '../data/index.js';
 import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName } from '../core/i18n.js';
-import { tierFor, nextTier, CHANNELS } from '../core/loyalty.js';
+import { tierFor, nextTier, CHANNELS, canOperate } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, modal, qrSvg, errText } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
 import { EV_ICON, eventTitle, signed, evName } from './biz-common.js';
@@ -29,7 +29,7 @@ async function join(slug) {
   if (saved && !qs.has('new')) return location.replace(`rewards.html?c=${saved}`);
   applyLang(b.lang); brand(b);
   const unit = unitWord(b.program, b.currency);
-  const paused = b.status !== 'active';
+  const paused = !canOperate(b);
 
   const draw = () => {
     root.className = 'cust'; root.style.setProperty('--cb', b.colors?.bg || '#0F6E5C'); root.style.paddingBottom = '24px';
@@ -115,6 +115,7 @@ async function cardApp(token) {
     const stampy = b.program.type === 'stamps' || b.program.type === 'visits';
     const cheapest = [...live()].sort((x, y) => x.cost - y.cost).find((r) => r.cost > c.points);
     return `${welcome ? `<div class="note" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}<span><b>${t('join_welcome', { program: esc(programName(b)) })}</b><br><span class="small">${t('w_saved')}</span></span></div>` : ''}
+      ${!canOperate(b) ? `<div class="note">${icon('info')}<span>${t('c_paused')}</span></div>` : ''}
       ${renderCard({ business: b, card: c, rewardsReady: ready().length })}
       <p class="small muted" style="text-align:center">${t('c_show_staff')}</p>
       ${openCodes().length ? `<section class="panel"><div class="panel-h"><h3>${t('c_open_codes')}</h3></div><div class="panel-b"><ul class="list">${openCodes().map((r) => `<li><span class="grow"><span class="t">${esc(evName(r))}</span><span class="s">${t('c_code_exp', { t: fmtTime(r.expiresAt) })}</span></span><button class="btn sm" data-show="${esc(r.id)}">${esc(r.id)}</button></li>`).join('')}</ul></div></section>` : ''}
@@ -133,7 +134,7 @@ async function cardApp(token) {
     const c = data.card; const avail = ready(); const locked = live().filter((r) => c.points < r.cost);
     const row = (r, ok) => `<div class="reward-row ${ok ? '' : 'locked'}"><span class="ri" ${r.image ? `style="background:url('${esc(r.image)}') center/cover"` : ''}>${r.image ? '' : icon('gift')}</span>
       <div class="grow" style="flex:1;min-width:0"><b>${esc(rewardName(r))}</b><div class="small muted">${fmtNum(r.cost)} ${esc(unit())}${!ok ? ' · ' + t('c_need_more', { n: fmtNum(r.cost - c.points), unit: esc(unit()) }) : ''}</div>${r.description ? `<div class="small muted">${esc(r.description)}</div>` : ''}</div>
-      ${ok ? `<button class="btn primary sm" data-redeem="${r.id}">${t('c_redeem')}</button>` : ''}</div>`;
+      ${ok && canOperate(b) ? `<button class="btn primary sm" data-redeem="${r.id}">${t('c_redeem')}</button>` : ''}</div>`;
     return `<h2>${t('c_rewards')}</h2>
       <div class="spread"><span class="muted">${t('c_points')}</span><b class="num" style="font-size:1.3rem">${fmtNum(c.points)} <span class="small muted" style="font-weight:400">${esc(unit())}</span></b></div>
       ${avail.length ? `<h3>${t('c_available')}</h3>${avail.map((r) => row(r, true)).join('')}` : ''}
