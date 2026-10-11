@@ -8,15 +8,15 @@ export const CONFIG = {
   // 'demo'     → everything runs in this browser (localStorage), seeded with Joe's Pizza.
   // 'firebase' → real multi-tenant backend (fill FIREBASE below).
   // You can also force a mode per visit with ?mode=demo or ?mode=firebase.
-  MODE: 'demo',
+  MODE: 'firebase',
 
   FIREBASE: {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: '',
+    apiKey: 'AIzaSyAy-odbhQa2gMRmXgFfLLZJVdkFCZ1X_CI',
+    authDomain: 'nuqati-39894.firebaseapp.com',
+    projectId: 'nuqati-39894',
+    storageBucket: 'nuqati-39894.firebasestorage.app',
+    messagingSenderId: '605724800372',
+    appId: '1:605724800372:web:d0f79da23b9f04f9c1e821',
   },
   FIREBASE_SDK_VERSION: '12.19.0',
 
