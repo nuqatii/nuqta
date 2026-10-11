@@ -55,8 +55,9 @@ export function createService({ db, auth, mode }) {
     mode, db, auth,
 
     // ── Auth & memberships ─────────────────────────────────
-    async signUp(email, password, name) { const u = await auth.signUp(email, password, name); await S.claimInvites(); return u; },
-    async signIn(email, password) { const u = await auth.signIn(email, password); await S.claimInvites(); return u; },
+    // Claiming staff invites must never block signing in (e.g. while a database index is still building).
+    async signUp(email, password, name) { const u = await auth.signUp(email, password, name); await S.claimInvites().catch((e) => console.warn('claimInvites', e)); return u; },
+    async signIn(email, password) { const u = await auth.signIn(email, password); await S.claimInvites().catch((e) => console.warn('claimInvites', e)); return u; },
     async signOut() { roleCache.clear(); await auth.signOut(); },
 
     async myMemberships() {
