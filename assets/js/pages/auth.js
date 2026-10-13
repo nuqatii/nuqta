@@ -1,7 +1,7 @@
 // Landing / sign-in / sign-up.
 import { getService } from '../data/index.js';
 import { t, setLang, lang, appName } from '../core/i18n.js';
-import { esc, icon, showError, toast, $ } from '../ui/ui.js';
+import { esc, icon, showError, toast, $, legalLink, legalLinks } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
 import { DEMO_ACCOUNTS, DEMO_CARD, DEMO_CARD_UC } from '../data/demo-seed.js';
 
@@ -47,6 +47,7 @@ function render() {
       <label class="field"><span>${t('email')}</span><input class="input" name="email" type="email" autocomplete="email" required dir="ltr"></label>
       <label class="field"><span>${t('password')}</span><input class="input" name="password" type="password" autocomplete="${isUp ? 'new-password' : 'current-password'}" required minlength="6" dir="ltr"></label>
       <button class="btn primary lg block" type="submit">${t(isUp ? 'signup' : 'signin')}</button>
+      ${isUp ? `<p class="small muted">${t('auth_legal', { terms: legalLink('terms'), privacy: legalLink('privacy') })}</p>` : ''}
       <div class="spread small">
         <span class="muted">${t(isUp ? 'have_account' : 'no_account')} <a href="#" id="toggle">${t(isUp ? 'signin' : 'signup')}</a></span>
         ${!isUp ? `<a href="#" id="forgot">${t('forgot')}</a>` : ''}
@@ -61,6 +62,7 @@ function render() {
         <a class="btn ghost block" href="rewards.html?b=joespizza">${icon('qr')}${lang === 'ar' ? 'جرّب صفحة الانضمام' : 'Try the join page'}</a>
       </div>
     </div>` : ''}
+    ${legalLinks()}
   </section>`;
 
   $('#lang').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); render(); };

@@ -56,7 +56,7 @@ test('demo seed has the promised shape', async () => {
 test('owner journey: create business → join → purchase → redeem', async () => {
   await S.signOut();
   await S.signUp('new@cafe.test', 'secret1', 'Rasha');
-  const b = await S.createBusiness({ name: 'Rasha Café', type: 'cafe', programType: 'points', firstReward: { name: 'Free coffee', cost: 50 } });
+  const b = await S.createBusiness({ name: 'Rasha Café', type: 'cafe', termsAccepted: true, programType: 'points', firstReward: { name: 'Free coffee', cost: 50 } });
   assert.equal(b.slug, 'rasha-cafe');
   const j = await S.joinProgram('rasha-cafe', { firstName: 'Maya', phone: '0944 000 111' });
   await assert.rejects(S.joinProgram('rasha-cafe', { firstName: 'Maya', phone: '+963944000111' }), /already-member/);
@@ -140,7 +140,7 @@ test('expired business is locked; admin payment unlocks it', async () => {
 test('new businesses start on the platform trial length', async () => {
   await S.signOut();
   await S.signUp('trial@shop.test', 'secret1', 'T');
-  const b = await S.createBusiness({ name: 'Trial Shop', type: 'retail' });
+  const b = await S.createBusiness({ name: 'Trial Shop', type: 'retail', termsAccepted: true });
   assert.equal(b.plan, 'trial');
   assert.equal(L.accessState(b).state, 'trial');
   assert.equal(L.accessState(b).daysLeft, 30);
@@ -149,7 +149,7 @@ test('new businesses start on the platform trial length', async () => {
 test('the platform admin account cannot own a business', async () => {
   await S.signOut();
   await S.signIn(DEMO_ACCOUNTS.admin.email, 'demo1234');
-  await assert.rejects(S.createBusiness({ name: 'Admin Shop', type: 'retail' }), /admin-no-business/);
+  await assert.rejects(S.createBusiness({ name: 'Admin Shop', type: 'retail', termsAccepted: true }), /admin-no-business/);
 });
 
 test('stamp cards count in rounds: progress resets, rewards stack, redeeming takes one off', () => {
@@ -161,4 +161,22 @@ test('stamp cards count in rounds: progress resets, rewards stack, redeeming tak
   assert.equal(L.readyCount(prog, rw, 13), 2);
   assert.deepEqual(L.stampState(prog, rw, 13 - 6), { goal: 6, progress: 1, ready: 1, left: 5 });   // after redeeming one
   assert.equal(L.readyCount({ type: 'points' }, [{ cost: 100, active: true }, { cost: 500, active: true }], 300), 1);
+});
+
+test('terms must be accepted; customers can ask for deletion and the owner removes their details', async () => {
+  await S.signOut();
+  await S.signUp('legal@shop.test', 'secret1', 'L');
+  await assert.rejects(S.createBusiness({ name: 'No Terms', type: 'retail' }), /terms-required/);
+  const b = await S.createBusiness({ name: 'Legal Shop', type: 'retail', termsAccepted: true, termsVersion: '2026-10-13' });
+  assert.equal(b.terms.version, '2026-10-13');
+  const j = await S.joinProgram(b.slug, { firstName: 'Hiba', phone: '0966 111 222' });
+  await S.requestDeletion(j.cardToken);
+  const reqs = await S.listDeletionRequests(b.id);
+  assert.equal(reqs.length, 1);
+  await S.deleteCustomerData(b.id, reqs[0].id);
+  assert.equal((await S.listCustomers(b.id)).length, 0);
+  assert.equal(await S.getCard(j.cardToken), null, 'card stops working');
+  assert.equal((await S.listDeletionRequests(b.id)).length, 0);
+  // The same phone can join again as a fresh member.
+  assert.ok((await S.joinProgram(b.slug, { firstName: 'Hiba', phone: '0966 111 222' })).cardToken);
 });

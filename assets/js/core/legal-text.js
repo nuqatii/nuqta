@@ -1,0 +1,224 @@
+// Privacy Policy and Terms of Service, Arabic + English.
+// Placeholders: {name} operator name, {country}, {whatsapp}, {days} retention after an account ends.
+// Each document is a list of sections: [heading, ...blocks]; a block is a paragraph string or an array (bullet list).
+// Keep both languages saying the same thing. Not legal advice: have a lawyer review before relying on it.
+
+export const PRIVACY = {
+  en: {
+    title: 'Privacy Policy',
+    intro: '{name} is a loyalty-card service used by restaurants, cafés, shops and salons. This policy explains what information we collect, why, who can see it, and the choices you have. It covers customers who join a loyalty program and businesses that use {name}.',
+    sections: [
+      ['Who is responsible for your information',
+        'Each business that runs a loyalty program on {name} decides how it uses the information of the customers who join it. {name} operates the service on the business’s behalf and protects that information. {name} is operated from {country}.'],
+      ['What we collect from customers', [
+        'What you enter when you join: first name and mobile number; and, only if you choose, email address and birthday.',
+        'What you may add later on your card’s Profile tab: last name and preferred way to be contacted.',
+        'Your loyalty activity with that business: the date of each visit or purchase, purchase amounts, points or stamps earned, rewards redeemed, the branch and the staff member who recorded it.',
+        'A private card link and member number, so the cashier can find your card.',
+      ]],
+      ['What we collect from businesses', [
+        'Names and email addresses of the owner and staff accounts.',
+        'Business details: name, logo, colours, loyalty program settings and rewards.',
+        'Records of subscription payments made to {name}.',
+      ]],
+      ['What we do not collect', [
+        'We do not collect payment card details, your location or your contacts.',
+        'The cashier’s camera is used only to scan your card’s code on the cashier’s device; no images are saved.',
+        'We do not use advertising cookies or trackers.',
+      ]],
+      ['How the information is used', [
+        'To run the loyalty program: show your card, add points or stamps, and let you redeem rewards.',
+        'To let the business you joined contact you with offers and news, for example on WhatsApp or by text message. You can turn this off at any time from your card’s Profile tab or by telling the business.',
+        'If you gave your birthday, so the business can offer you a birthday treat.',
+        'To give the business statistics about its loyalty program.',
+        'To keep the service secure, prevent misuse, and improve it.',
+      ]],
+      ['Who can see your information', [
+        'Only the business you joined, and only its staff accounts with the right access. Each business sees its own customers only; businesses never see each other’s customers.',
+        'The {name} team can see totals (such as number of members per business) to operate the service, but not customer names or phone numbers, except when needed to fix a problem or when the law requires it.',
+        'Service providers that host the service for us: Google Firebase (database and sign-in) and GitHub Pages (website). Their servers may be outside {country}.',
+        'We never sell your information, and we do not share it with advertisers.',
+      ]],
+      ['How long we keep it', [
+        'Your information is kept while you are a member of the loyalty program.',
+        'If you ask to delete your data, the business removes your name, phone number and other contact details, and your card stops working.',
+        'If a business stops using {name}, its data, including its customers’ information, is deleted within {days} days.',
+      ]],
+      ['Your choices', [
+        'See your points, rewards and history at any time on your card.',
+        'Change your details or turn off offers from your card’s Profile tab.',
+        'Ask for your data to be deleted with the “Delete my data” button on your card’s Profile tab, by asking the business, or by contacting us.',
+      ]],
+      ['Keeping it safe',
+        'All information travels over encrypted connections (HTTPS). Access inside each business is limited by staff role. Your card link is private: anyone who has it can see your card, so do not share it publicly.'],
+      ['Information stored on your phone',
+        'The website stores a small amount of information in your browser so it works: your language, the list of cards you have opened (“My cards”), and, for business staff, that they are signed in. It is not used for advertising.'],
+      ['Children',
+        'The service is not directed at children under 13. If you believe a child has joined without a parent’s agreement, contact us or the business and the data will be deleted.'],
+      ['Changes to this policy',
+        'We may update this policy. The date at the top shows the latest version. If a change is important, we will show a notice in the service.'],
+    ],
+  },
+  ar: {
+    title: 'سياسة الخصوصية',
+    intro: '{name} خدمة بطاقات ولاء تستخدمها المطاعم والمقاهي والمتاجر والصالونات. توضح هذه السياسة المعلومات التي نجمعها، ولماذا، ومن يستطيع رؤيتها، والخيارات المتاحة لك. وهي تشمل الزبائن الذين ينضمون إلى برامج الولاء والأنشطة التجارية التي تستخدم {name}.',
+    sections: [
+      ['من المسؤول عن معلوماتك',
+        'كل نشاط تجاري يدير برنامج ولاء على {name} يحدد كيفية استخدام معلومات الزبائن الذين ينضمون إليه. تشغّل {name} الخدمة نيابةً عن النشاط التجاري وتحمي هذه المعلومات. يتم تشغيل {name} من {country}.'],
+      ['ما نجمعه من الزبائن', [
+        'ما تدخله عند الانضمام: الاسم الأول ورقم الموبايل، والبريد الإلكتروني وتاريخ الميلاد فقط إذا اخترت إضافتهما.',
+        'ما قد تضيفه لاحقاً في تبويب «حسابي» في بطاقتك: الكنية ووسيلة التواصل المفضلة.',
+        'نشاطك في برنامج الولاء لدى ذلك النشاط: تاريخ كل زيارة أو عملية شراء، وقيمة المشتريات، والنقاط أو الأختام المكتسبة، والمكافآت المستبدلة، والفرع والموظف الذي سجّلها.',
+        'رابط خاص لبطاقتك ورقم عضوية، ليتمكن الكاشير من إيجاد بطاقتك.',
+      ]],
+      ['ما نجمعه من الأنشطة التجارية', [
+        'أسماء وعناوين البريد الإلكتروني لحساب المالك وحسابات الموظفين.',
+        'معلومات النشاط: الاسم والشعار والألوان وإعدادات برنامج الولاء والمكافآت.',
+        'سجلات دفعات الاشتراك المدفوعة لـ {name}.',
+      ]],
+      ['ما لا نجمعه', [
+        'لا نجمع بيانات بطاقات الدفع ولا موقعك ولا جهات اتصالك.',
+        'تُستخدم كاميرا الكاشير فقط لمسح رمز بطاقتك على جهاز الكاشير، ولا يتم حفظ أي صور.',
+        'لا نستخدم ملفات تعريف الارتباط الإعلانية أو أدوات التتبع.',
+      ]],
+      ['كيف نستخدم المعلومات', [
+        'لتشغيل برنامج الولاء: عرض بطاقتك وإضافة النقاط أو الأختام وتمكينك من استبدال المكافآت.',
+        'لتمكين النشاط الذي انضممت إليه من التواصل معك بالعروض والأخبار، مثلاً عبر واتساب أو الرسائل النصية. يمكنك إيقاف ذلك في أي وقت من تبويب «حسابي» في بطاقتك أو بإبلاغ النشاط.',
+        'إذا أضفت تاريخ ميلادك، ليتمكن النشاط من تقديم هدية لك في عيد ميلادك.',
+        'لتزويد النشاط بإحصاءات عن برنامج الولاء الخاص به.',
+        'للحفاظ على أمان الخدمة ومنع إساءة استخدامها وتحسينها.',
+      ]],
+      ['من يستطيع رؤية معلوماتك', [
+        'النشاط الذي انضممت إليه فقط، ومن خلال حسابات موظفيه التي تملك الصلاحية المناسبة. كل نشاط يرى زبائنه فقط، ولا ترى الأنشطة زبائن بعضها أبداً.',
+        'يستطيع فريق {name} رؤية الأرقام الإجمالية (مثل عدد الأعضاء لكل نشاط) لتشغيل الخدمة، لكن ليس أسماء الزبائن أو أرقامهم، إلا عند الحاجة لإصلاح مشكلة أو عندما يتطلب القانون ذلك.',
+        'مزوّدو الخدمات الذين يستضيفون الخدمة لنا: Google Firebase (قاعدة البيانات وتسجيل الدخول) وGitHub Pages (الموقع). قد تكون خوادمهم خارج {country}.',
+        'لا نبيع معلوماتك أبداً، ولا نشاركها مع المعلنين.',
+      ]],
+      ['مدة الاحتفاظ بالمعلومات', [
+        'نحتفظ بمعلوماتك طالما أنت عضو في برنامج الولاء.',
+        'إذا طلبت حذف بياناتك، يحذف النشاط اسمك ورقمك وبيانات التواصل الأخرى، وتتوقف بطاقتك عن العمل.',
+        'إذا توقف نشاط تجاري عن استخدام {name}، تُحذف بياناته، بما فيها معلومات زبائنه، خلال {days} يوماً.',
+      ]],
+      ['خياراتك', [
+        'شاهد نقاطك ومكافآتك وسجلك في أي وقت على بطاقتك.',
+        'عدّل معلوماتك أو أوقف العروض من تبويب «حسابي» في بطاقتك.',
+        'اطلب حذف بياناتك عبر زر «احذف بياناتي» في تبويب «حسابي»، أو من خلال النشاط، أو بالتواصل معنا.',
+      ]],
+      ['حماية المعلومات',
+        'تنتقل جميع المعلومات عبر اتصالات مشفّرة (HTTPS). والوصول داخل كل نشاط محدود حسب صلاحية الموظف. رابط بطاقتك خاص: أي شخص يملكه يستطيع رؤية بطاقتك، لذا لا تنشره علناً.'],
+      ['المعلومات المحفوظة على موبايلك',
+        'يحفظ الموقع قدراً صغيراً من المعلومات في متصفحك ليعمل: لغتك، وقائمة البطاقات التي فتحتها («بطاقاتي»)، وبالنسبة لموظفي الأنشطة، حالة تسجيل الدخول. لا تُستخدم هذه المعلومات للإعلانات.'],
+      ['الأطفال',
+        'الخدمة غير موجّهة للأطفال دون 13 عاماً. إذا كنت تعتقد أن طفلاً انضم دون موافقة أحد والديه، تواصل معنا أو مع النشاط وسيتم حذف بياناته.'],
+      ['التعديلات على هذه السياسة',
+        'قد نحدّث هذه السياسة. يوضح التاريخ في الأعلى أحدث نسخة. وإذا كان التعديل مهماً، سنعرض إشعاراً داخل الخدمة.'],
+    ],
+  },
+};
+
+export const TERMS = {
+  en: {
+    title: 'Terms of Service',
+    intro: 'These terms are an agreement between {name} and the business that creates an account (“you”). By creating a business on {name} you accept them. Customers who only join a loyalty program are covered by the Privacy Policy.',
+    sections: [
+      ['The service',
+        '{name} lets your business create a branded digital loyalty card, add points or stamps, offer rewards, keep a customer list, prepare campaigns and manage staff accounts. Features may change as the service improves.'],
+      ['Your account', [
+        'Give accurate information about your business and keep it up to date.',
+        'You are responsible for every account you invite (owner, manager, cashier, marketing) and for what they do. Keep passwords private and remove access for people who leave.',
+        'You must be authorised to act for the business you register.',
+      ]],
+      ['Free trial and subscription', [
+        'Each new business starts with a free trial. Its length is shown in your dashboard.',
+        'To continue after the trial, choose a plan on the Subscription page and pay using the methods shown there. Your subscription starts once {name} confirms the payment.',
+        'Paid time is added after any trial or paid time you still have, so paying early does not lose days.',
+        'Fees already paid are not refunded for partial periods, unless the law requires it.',
+        'Prices may change. A change applies from your next payment, and we will tell you in advance.',
+      ]],
+      ['When a trial or subscription ends', [
+        'For 3 days after it ends, the service keeps working and shows a reminder.',
+        'After that, the program is paused: no points can be added or rewards redeemed, and the join page is closed. Your customers can still open their cards. Paying restores everything immediately.',
+        'If the account stays paused or is closed, its data is deleted after {days} days.',
+      ]],
+      ['Your responsibilities to your customers', [
+        'Honour the rewards and points you publish to customers.',
+        'Only send offers to customers who have not turned offers off, and follow the law on marketing messages.',
+        'Act on customers’ requests to delete their data (the dashboard shows these requests).',
+        'Use customer information only for your own loyalty program and related offers.',
+      ]],
+      ['Your data',
+        'Your customer list and business information belong to your business. You can export customers and activity at any time (CSV). {name} uses this data only to provide the service, as described in the Privacy Policy, and never sells it.'],
+      ['Acceptable use', [
+        'Do not use the service for fraud, misleading offers, spam, or anything illegal.',
+        'Do not impersonate another business or person.',
+        'Do not try to access other businesses’ data, overload the service, or bypass its security.',
+      ]],
+      ['Suspension and closing an account', [
+        '{name} may pause or close an account for non-payment or for breaking these terms. Where possible we will warn you first.',
+        'You can stop using the service at any time by telling us on WhatsApp.',
+      ]],
+      ['Availability',
+        'We work to keep the service running, but it is provided “as is” and may sometimes be unavailable, for example during maintenance or network problems in your area. We do not guarantee it will always be available or free of errors.'],
+      ['Liability',
+        'To the extent the law allows, {name} is not responsible for indirect losses such as lost profits or lost customers. Our total liability for any claim is limited to the subscription fees you paid in the 3 months before the claim.'],
+      ['Ownership',
+        'The {name} software and design belong to {name}. Your logo, business name and content remain yours; you allow us to display them in the service (for example on your customers’ cards).'],
+      ['Changes to these terms',
+        'We may update these terms. The date at the top shows the latest version. For important changes we will notify you in your dashboard; continuing to use the service means you accept the updated terms.'],
+      ['Governing law',
+        'These terms are governed by the laws of the Syrian Arab Republic. We will first try to resolve any dispute amicably; if that fails, the competent courts in Damascus have jurisdiction.'],
+    ],
+  },
+  ar: {
+    title: 'شروط الخدمة',
+    intro: 'هذه الشروط اتفاق بين {name} والنشاط التجاري الذي ينشئ حساباً («أنت»). بإنشائك نشاطاً على {name} فإنك توافق عليها. أما الزبائن الذين ينضمون إلى برنامج ولاء فقط فتشملهم سياسة الخصوصية.',
+    sections: [
+      ['الخدمة',
+        'تتيح {name} لنشاطك إنشاء بطاقة ولاء رقمية تحمل علامتك، وإضافة النقاط أو الأختام، وتقديم المكافآت، والاحتفاظ بقائمة الزبائن، وتحضير الحملات، وإدارة حسابات الموظفين. قد تتغير الميزات مع تطوير الخدمة.'],
+      ['حسابك', [
+        'قدّم معلومات صحيحة عن نشاطك وحافظ على تحديثها.',
+        'أنت مسؤول عن كل حساب تدعوه (مالك، مدير، كاشير، تسويق) وعن تصرفاته. حافظ على سرية كلمات المرور واحذف صلاحية من يغادر العمل.',
+        'يجب أن تكون مخولاً بالتصرف باسم النشاط الذي تسجّله.',
+      ]],
+      ['التجربة المجانية والاشتراك', [
+        'يبدأ كل نشاط جديد بتجربة مجانية، وتظهر مدتها في لوحة التحكم.',
+        'للاستمرار بعد التجربة، اختر باقة من صفحة الاشتراك وادفع بإحدى الطرق المبيّنة فيها. يبدأ اشتراكك بعد أن تؤكد {name} استلام الدفعة.',
+        'تُضاف المدة المدفوعة بعد أي مدة تجربة أو اشتراك متبقية لديك، فلا تخسر أياماً إذا دفعت مبكراً.',
+        'لا تُسترد الرسوم المدفوعة عن الفترات الجزئية، إلا إذا تطلّب القانون ذلك.',
+        'قد تتغير الأسعار، ويُطبَّق التغيير اعتباراً من دفعتك التالية، وسنبلغك مسبقاً.',
+      ]],
+      ['عند انتهاء التجربة أو الاشتراك', [
+        'خلال 3 أيام بعد الانتهاء، تستمر الخدمة بالعمل مع ظهور تذكير.',
+        'بعد ذلك يتوقف البرنامج مؤقتاً: لا يمكن إضافة نقاط أو استبدال مكافآت، وتُغلق صفحة الانضمام. يستطيع زبائنك فتح بطاقاتهم. والدفع يعيد كل شيء فوراً.',
+        'إذا بقي الحساب متوقفاً أو أُغلق، تُحذف بياناته بعد {days} يوماً.',
+      ]],
+      ['مسؤولياتك تجاه زبائنك', [
+        'التزم بالمكافآت والنقاط التي تعلنها لزبائنك.',
+        'أرسل العروض فقط للزبائن الذين لم يوقفوا استلامها، والتزم بالقانون فيما يخص الرسائل التسويقية.',
+        'نفّذ طلبات الزبائن بحذف بياناتهم (تظهر هذه الطلبات في لوحة التحكم).',
+        'استخدم معلومات الزبائن فقط لبرنامج الولاء الخاص بك والعروض المرتبطة به.',
+      ]],
+      ['بياناتك',
+        'قائمة زبائنك ومعلومات نشاطك ملك لنشاطك. يمكنك تصدير الزبائن والحركات في أي وقت (CSV). تستخدم {name} هذه البيانات فقط لتقديم الخدمة كما هو موضح في سياسة الخصوصية، ولا تبيعها أبداً.'],
+      ['الاستخدام المقبول', [
+        'لا تستخدم الخدمة للاحتيال أو العروض المضللة أو الرسائل المزعجة أو أي أمر مخالف للقانون.',
+        'لا تنتحل صفة نشاط أو شخص آخر.',
+        'لا تحاول الوصول إلى بيانات أنشطة أخرى أو إثقال الخدمة أو تجاوز إجراءات الحماية فيها.',
+      ]],
+      ['الإيقاف وإغلاق الحساب', [
+        'يحق لـ {name} إيقاف حساب مؤقتاً أو إغلاقه بسبب عدم الدفع أو مخالفة هذه الشروط، وسننبهك مسبقاً متى أمكن.',
+        'يمكنك التوقف عن استخدام الخدمة في أي وقت بإبلاغنا عبر واتساب.',
+      ]],
+      ['توفر الخدمة',
+        'نعمل على إبقاء الخدمة متاحة، لكنها تُقدَّم «كما هي» وقد تتوقف أحياناً، مثلاً أثناء الصيانة أو بسبب مشاكل الشبكة في منطقتك. ولا نضمن توفرها دائماً أو خلوها من الأخطاء.'],
+      ['حدود المسؤولية',
+        'في الحدود التي يسمح بها القانون، لا تتحمل {name} مسؤولية الخسائر غير المباشرة مثل الأرباح أو الزبائن الضائعين. ولا تتجاوز مسؤوليتنا الإجمالية عن أي مطالبة رسوم الاشتراك التي دفعتها خلال الأشهر الثلاثة السابقة للمطالبة.'],
+      ['الملكية',
+        'برنامج {name} وتصميمه ملك لـ {name}. أما شعارك واسم نشاطك ومحتواك فتبقى ملكاً لك، وتسمح لنا بعرضها داخل الخدمة (مثلاً على بطاقات زبائنك).'],
+      ['التعديلات على هذه الشروط',
+        'قد نحدّث هذه الشروط. يوضح التاريخ في الأعلى أحدث نسخة. وفي التعديلات المهمة سنبلغك في لوحة التحكم، واستمرارك باستخدام الخدمة يعني موافقتك على الشروط المحدّثة.'],
+      ['القانون المطبّق',
+        'تخضع هذه الشروط لقوانين الجمهورية العربية السورية. سنحاول أولاً حل أي خلاف ودياً، فإن تعذّر ذلك تختص المحاكم المختصة في دمشق بالنظر فيه.'],
+    ],
+  },
+};

@@ -2,7 +2,7 @@
 import { getService } from '../data/index.js';
 import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName } from '../core/i18n.js';
 import { tierFor, nextTier, CHANNELS, canOperate, stampGoal, stampState, readyCount, isStampy } from '../core/loyalty.js';
-import { esc, icon, $, showError, toast, modal, qrSvg, errText } from '../ui/ui.js';
+import { esc, icon, $, showError, toast, modal, qrSvg, errText, legalLink, legalLinks } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
 import { EV_ICON, eventTitle, signed, evName } from './biz-common.js';
 import { wallet, snapshot } from '../core/wallet.js';
@@ -52,7 +52,7 @@ async function join(slug) {
         <label class="field"><span>${t('birthday')} <span class="muted">(${t('optional')})</span></span><input class="input" name="birthday" type="date" max="${new Date().toISOString().slice(0, 10)}" style="min-height:52px"><small>${t('join_bday_hint', { biz: esc(b.name) })}</small></label>
         <div id="err" role="alert"></div>
         <button class="btn primary xl" type="submit">${t('join_btn')}</button>
-        <p class="small muted" style="text-align:center">${t('join_privacy', { biz: esc(b.name) })} ${t('join_offers_note', { biz: esc(b.name) })}</p>
+        <p class="small muted" style="text-align:center">${t('join_privacy', { biz: esc(b.name) })} ${t('join_offers_note', { biz: esc(b.name) })} ${t('join_legal', { privacy: legalLink('privacy') })}</p>
       </form>`}
     </div>`;
     $('#lang').onclick = () => { toggleLang(); draw(); };
@@ -170,7 +170,12 @@ async function cardApp(token) {
         <label class="check"><input type="checkbox" name="marketingConsent"><span>${t('join_consent')}</span></label>
         <button class="btn primary" type="submit">${t('save')}</button>
         <p class="tiny muted">${t('join_privacy', { biz: esc(b.name) })}</p>
-      </form>`;
+      </form>
+      <section class="panel"><div class="panel-b stack" style="gap:10px">
+        ${c.deletionRequestedAt ? `<div class="note">${icon('info')}<span>${t('del_requested', { d: fmtDate(c.deletionRequestedAt), biz: esc(b.name) })}</span></div>`
+          : `<button class="btn danger block" id="delme">${icon('trash')}${t('del_btn')}</button>`}
+        ${legalLinks()}
+      </div></section>`;
   }
 
   async function render() {
@@ -184,6 +189,12 @@ async function cardApp(token) {
       pf.lastName.value = pr.lastName || ''; pf.email.value = pr.email || ''; pf.birthday.value = pr.birthday || '';
       pf.preferredChannel.value = pr.preferredChannel || 'whatsapp'; pf.marketingConsent.checked = !!pr.marketingConsent;
     }
+    $('#delme')?.addEventListener('click', async () => {
+      const ok = await modal({ title: t('del_title'), body: `<p>${esc(t('del_body', { biz: b.name }))}</p>`,
+        actions: [{ label: t('cancel'), value: false }, { label: t('del_confirm'), kind: 'danger', value: true }] });
+      if (!ok) return;
+      try { await S.requestDeletion(token); await refresh(); data.card.deletionRequestedAt = Date.now(); render(); } catch (err) { showError(err); }
+    });
     if (pf) pf.onsubmit = async (e) => {
       e.preventDefault();
       try { await S.updateMyProfile(token, { lastName: pf.lastName.value, email: pf.email.value, birthday: pf.birthday.value, preferredChannel: pf.preferredChannel.value, marketingConsent: pf.marketingConsent.checked }); await refresh(); toast(t('c_profile_saved')); }
@@ -254,6 +265,7 @@ async function walletPage() {
         <button class="btn block" data-install ${installPrompt ? '' : 'hidden'}>${icon('dl')}${t('w_install_btn')}</button>`}
         ${list.length ? `<p class="small muted">${t('w_lost')}</p>` : ''}
         <p class="tiny muted" style="text-align:center;margin-top:8px">${esc(appName())}</p>
+        ${legalLinks()}
       </main>`;
     $('#lang').onclick = () => { toggleLang(); draw(); };
     $('#edit')?.addEventListener('click', () => { editing = !editing; draw(); });

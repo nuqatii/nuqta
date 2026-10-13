@@ -122,3 +122,10 @@ test('a new business must start on a normal trial', async () => {
   await assertFails(mk({ paidUntil: Date.now() + 400 * 86400000 }));
   await assertSucceeds(mk({}));
 });
+
+test('a customer can request deletion only for their own card; only the owner reads requests', async () => {
+  await assertSucceeds(setDoc(doc(anon(), `businesses/${BID}/deletionRequests/${CID}`), { cardToken: TOKEN, memberNumber: '100001', at: Date.now() }));
+  await assertFails(setDoc(doc(anon(), `businesses/${BID}/deletionRequests/someoneElse`), { cardToken: TOKEN, memberNumber: '100001', at: Date.now() }));
+  await assertFails(getDocs(collection(as(CASHIER), `businesses/${BID}/deletionRequests`)));
+  await assertSucceeds(getDocs(collection(as(JOE), `businesses/${BID}/deletionRequests`)));
+});

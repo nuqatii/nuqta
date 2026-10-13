@@ -87,6 +87,7 @@ export function createService({ db, auth, mode }) {
     async createBusiness(input) {
       const u = user(); if (!u) fail('unauthenticated');
       if (await S.isPlatformAdmin()) fail('admin-no-business');
+      if (!input.termsAccepted) fail('terms-required');
       const name = L.clampStr(input.name, 60); if (!name) fail('invalid-name');
       const platform = await db.get('platform/settings');
       if (platform && platform.signupsOpen === false) fail('signups-closed');
@@ -104,6 +105,7 @@ export function createService({ db, auth, mode }) {
         program,
         design: { style: 'gradient', layout: 'classic', programName: input.programName || '', cover: null, icon: 'star', codeFormat: 'qr', ...(input.design || {}) },
         tiers: input.tiers || L.defaultTiers(),
+        terms: { version: L.clampStr(input.termsVersion || '', 20), acceptedAt: now(), acceptedBy: u.uid },
         status: 'active', plan: 'trial', trialEndsAt: now() + trialDays * L.DAY, paidUntil: null, ownerUid: u.uid, createdAt: now(),
         memberSeq: 0, designVersion: 1,
       };
@@ -361,7 +363,7 @@ export function createService({ db, auth, mode }) {
       return S._createMember(b.id, { ...data, marketingConsent: !!data.marketingConsent }, 'qr');
     },
     async getCard(token) {
-      const card = await db.get(P.card(token)); if (!card) return null;
+      const card = await db.get(P.card(token)); if (!card || card.deleted) return null;
       const [business, rewards] = await Promise.all([S.getBusiness(card.businessId), S.listRewards(card.businessId)]);
       return { card, business, rewards: rewards.filter((r) => L.rewardIsLive(r)) };
     },
@@ -394,6 +396,34 @@ export function createService({ db, auth, mode }) {
         { op: 'update', path: P.sub(card.businessId, 'customers', card.customerId), data: clean },
         { op: 'update', path: P.card(token), data: { profile: { ...(card.profile || {}), ...clean } } },
       ]);
+    },
+
+    // ── Data deletion (privacy) ────────────────────────────
+    // The customer asks from their card; the owner then removes the personal details.
+    async requestDeletion(token) {
+      const card = await db.get(P.card(token)); if (!card || card.deleted) fail('not-found');
+      const t = now();
+      await db.batch([
+        { op: 'set', path: P.sub(card.businessId, 'deletionRequests', card.customerId), data: { cardToken: token, memberNumber: card.memberNumber, at: t } },
+        { op: 'update', path: P.card(token), data: { deletionRequestedAt: t } },
+      ]);
+      return t;
+    },
+    async listDeletionRequests(bid) { await need(bid, 'settings'); return db.list(P.sub(bid, 'deletionRequests'), { orderBy: ['at', 'asc'] }); },
+    // Removes name, phone and contact details; the card stops working. Purchase history stays
+    // in reports as anonymous activity (it only ever stored the customer id, never the name).
+    async deleteCustomerData(bid, cid) {
+      await need(bid, 'settings');
+      const c = await db.get(P.sub(bid, 'customers', cid)); if (!c) fail('not-found');
+      const t = now();
+      const ops = [
+        { op: 'delete', path: P.sub(bid, 'customers', cid) },
+        { op: 'delete', path: P.sub(bid, 'deletionRequests', cid) },
+      ];
+      if (c.phone) ops.push({ op: 'delete', path: P.sub(bid, 'phones', c.phone) });
+      if (c.cardToken) ops.push({ op: 'update', path: P.card(c.cardToken), data: { deleted: true, firstName: '', profile: {}, points: 0, updatedAt: t } });
+      await db.batch(ops);
+      await audit(bid, 'customer.delete', { customerId: cid, memberNumber: c.memberNumber });
     },
 
     // ── Staff ──────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { t, fmtNum, fmtMoney, fmtDate, ago, tierName, unitWord, rewardName, lang } from '../core/i18n.js';
 import { tierFor, autoSegment, AUTO_SEGMENTS, rewardIsLive, toLatinDigits, CHANNELS, isStampy, stampState } from '../core/loyalty.js';
-import { esc, icon, $, avatar, fullName, modal, showError, toast, download, toCSV, waLink, copyText } from '../ui/ui.js';
+import { esc, icon, $, avatar, fullName, modal, showError, toast, download, toCSV, waLink, copyText, confirmBox } from '../ui/ui.js';
 import { eventTitle, signed, EV_ICON, empty } from './biz-common.js';
 import { baseUrl } from '../config.js';
 
@@ -27,7 +27,9 @@ export default async function customers(ctx, el, { page, params }) {
   }
   const counts = Object.fromEntries(AUTO_SEGMENTS.map((s) => [s, 0])); for (const s of segOf.values()) counts[s]++;
 
+  const delReqs = ctx.can('settings') ? await ctx.S.listDeletionRequests(ctx.bid).catch(() => []) : [];
   el.innerHTML = `
+  ${delReqs.length ? `<div class="note" style="background:var(--danger-tint);color:var(--danger);margin-bottom:14px;align-items:center">${icon('shield')}<span style="flex:1">${delReqs.length === 1 ? t('del_banner_one') : t('del_banner', { n: fmtNum(delReqs.length) })}</span><button class="btn sm" id="delreqs">${t('del_review')}</button></div>` : ''}
   <div class="page-head"><div><h1>${t('cu_title')}</h1><p>${t('cu_count', { n: fmtNum(all.length) })}</p></div>
     <div class="actions"><button class="btn" id="csv">${icon('dl')}${t('export_csv')}</button><button class="btn primary" id="add">${icon('plus')}${t('cu_add')}</button></div></div>
   <div class="stack" style="gap:12px;margin-bottom:14px">
@@ -54,6 +56,18 @@ export default async function customers(ctx, el, { page, params }) {
     $('#more', box)?.addEventListener('click', () => { st.limit += 200; drawTable(); });
   }
   drawTable();
+  $('#delreqs', el)?.addEventListener('click', () => {
+    const byId = new Map(all.map((c) => [c.id, c]));
+    modal({ title: t('del_requests_title'), wide: true,
+      body: `<ul class="list">${delReqs.map((r) => { const c = byId.get(r.id) || { firstName: '#' + r.memberNumber }; return `<li>${avatar(c)}<span class="grow"><span class="t">${esc(fullName(c))}</span><span class="s"><span class="ltr">${esc(c.phone || '')}</span> · ${t('del_requested_on', { d: fmtDate(r.at) })}</span></span>
+        <button class="btn sm danger" data-del="${esc(r.id)}">${icon('trash')}${t('delete')}</button></li>`; }).join('')}</ul>`,
+      onMount: (m, close) => m.querySelectorAll('[data-del]').forEach((x) => (x.onclick = async () => {
+        const c = byId.get(x.dataset.del);
+        if (c && !(await confirmBox(t('del_customer'), t('del_customer_body', { name: fullName(c) }), t('delete'), 'danger'))) return;
+        try { await ctx.S.deleteCustomerData(ctx.bid, x.dataset.del); toast(t('del_done')); await ctx.customers(true); close(); customers(ctx, el, { page: 'customers', params: [] }); }
+        catch (e) { showError(e); }
+      })) });
+  });
   $('#q', el).oninput = (e) => { st.q = e.target.value; st.limit = 50; drawTable(); };
   $('#sort', el).onchange = (e) => { st.sort = e.target.value; drawTable(); };
   el.querySelectorAll('[data-seg]').forEach((x) => (x.onclick = () => { st.seg = x.dataset.seg; el.querySelectorAll('[data-seg]').forEach((y) => y.setAttribute('aria-pressed', y === x)); drawTable(); }));
@@ -150,12 +164,16 @@ async function profile(ctx, el, cid) {
   $('#more', el).onclick = () => modal({ title: fullName(c), body: `<div class="demo-list">
       <button data-a="open">${icon('card')}<span class="grow"><b>${t('open_card')}</b></span></button>
       <button data-a="copy">${icon('copy')}<span class="grow"><b>${t('copy')}</b><small class="ltr">${esc(link)}</small></span></button>
-      ${ctx.can('program') ? `<button data-a="adjust">${icon('sliders')}<span class="grow"><b>${t('adjust_points')}</b></span></button>` : ''}</div>`,
+      ${ctx.can('program') ? `<button data-a="adjust">${icon('sliders')}<span class="grow"><b>${t('adjust_points')}</b></span></button>` : ''}
+      ${ctx.can('settings') ? `<button data-a="delete" style="color:var(--danger)">${icon('trash')}<span class="grow"><b>${t('del_customer')}</b></span></button>` : ''}</div>`,
   onMount: (m, close) => m.querySelectorAll('[data-a]').forEach((x) => (x.onclick = async () => {
     close();
     if (x.dataset.a === 'open') window.open(link, '_blank');
     if (x.dataset.a === 'copy') copyText(link);
     if (x.dataset.a === 'adjust') { if (await adjustDialog(ctx, c)) { await ctx.customers(true); profile(ctx, el, cid); } }
+    if (x.dataset.a === 'delete' && await confirmBox(t('del_customer'), t('del_customer_body', { name: fullName(c) }), t('delete'), 'danger')) {
+      try { await ctx.S.deleteCustomerData(ctx.bid, c.id); toast(t('del_done')); await ctx.customers(true); ctx.nav('customers'); } catch (e) { showError(e); }
+    }
   })) });
 }
 const row = (k, v) => `<li><span class="grow small muted">${k}</span><span>${v}</span></li>`;

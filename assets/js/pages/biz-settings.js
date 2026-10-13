@@ -1,7 +1,7 @@
 // Settings and the Join QR / printable poster.
 import { t, fmtDate, ago, lang, unitWord, programName } from '../core/i18n.js';
 import { BUSINESS_TYPES } from '../core/loyalty.js';
-import { esc, icon, $, showError, toast, qrSvg, svgToPng, download, copyText } from '../ui/ui.js';
+import { esc, icon, $, showError, toast, qrSvg, svgToPng, download, copyText, legalLinks } from '../ui/ui.js';
 import { baseUrl } from '../config.js';
 
 export const joinUrl = (b) => `${baseUrl()}rewards.html?b=${b.slug}`;
@@ -58,9 +58,10 @@ async function settingsPage(ctx, el) {
       ${ctx.S.mode === 'demo' ? `<div class="hr" style="margin:18px 0"></div><div class="spread"><span class="muted small">${t('demo_banner')}</span><button class="btn danger" id="reset">${t('demo_reset')}</button></div>` : ''}
     </div></section>
     <section class="panel c5"><div class="panel-h"><h2>${t('se_audit')}</h2></div><div class="panel-b"><ul class="list">
-      ${audit.slice(0, 40).map((a) => `<li><span class="grow"><span class="t small ltr" style="font-weight:500">${esc(a.action)}</span><span class="s">${esc(a.actorEmail || '—')} · ${ago(a.at)}</span></span></li>`).join('') || `<li class="muted small">—</li>`}
+      ${''}${audit.slice(0, 40).map((a) => `<li><span class="grow"><span class="t small ltr" style="font-weight:500">${esc(a.action)}</span><span class="s">${esc(a.actorEmail || '—')} · ${ago(a.at)}</span></span></li>`).join('') || `<li class="muted small">—</li>`}
     </ul></div></section>
-  </div>`;
+  </div>
+  <div style="margin-top:20px">${legalLinks()}</div>`;
   $('#sf', el).onsubmit = async (e) => {
     e.preventDefault(); const f = e.target;
     if (!f.name.value.trim()) return f.name.focus();

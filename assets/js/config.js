@@ -20,6 +20,16 @@ export const CONFIG = {
   },
   FIREBASE_SDK_VERSION: '12.19.0',
 
+  // Shown in the Privacy Policy and Terms of Service.
+  LEGAL: {
+    name: { en: 'Nuqta', ar: 'نقطة' },       // put the registered business name here once you have it
+    country: { en: 'Syria', ar: 'سوريا' },
+    whatsapp: '+963953667748',
+    email: '',                                  // optional; leave empty to hide
+    updated: '2026-10-13',                      // change when you edit the texts
+    retentionDays: 90,
+  },
+
   DEFAULT_LANG: 'ar',          // 'ar' | 'en'
   DEFAULT_CURRENCY: 'SYP',     // per-business, editable in Settings
 };

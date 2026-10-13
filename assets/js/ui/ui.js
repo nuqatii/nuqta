@@ -209,4 +209,7 @@ export async function svgToPng(svg, size = 1024) {
   return new Promise((r) => c.toBlob(r, 'image/png'));
 }
 export async function copyText(s) { try { await navigator.clipboard.writeText(s); toast(t('copied')); } catch { prompt('', s); } }
+// Links to the legal pages, opened in a new tab so nobody loses what they were typing.
+export const legalLink = (kind) => `<a href="${kind}.html?lang=${lang}" target="_blank" rel="noopener">${t(kind === 'terms' ? 'legal_terms' : 'legal_privacy')}</a>`;
+export const legalLinks = () => `<div class="legal-links">${legalLink('privacy')}${legalLink('terms')}</div>`;
 export const waLink = (phone, text) => `https://wa.me/${String(phone || '').replace(/[^\d]/g, '')}?text=${encodeURIComponent(text)}`;

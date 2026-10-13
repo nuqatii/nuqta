@@ -1,7 +1,7 @@
 // Owner's Subscription page: status, plans and prices, how to pay, payment history.
 import { t, fmtNum, fmtMoney, fmtDate, lang } from '../core/i18n.js';
 import { accessState, PAID_PLANS } from '../core/loyalty.js';
-import { esc, icon, waLink } from '../ui/ui.js';
+import { esc, icon, waLink, legalLinks } from '../ui/ui.js';
 
 const CHIP = { trial: 'brand', active: 'ok', grace: 'warn', expired: 'bad', suspended: 'bad' };
 
@@ -36,6 +36,7 @@ export default async function billing(ctx, el) {
         ${wa ? `<a class="btn primary lg" href="${esc(wa)}" target="_blank" rel="noopener">${icon('whatsapp')}${t('bl_confirm')}</a>` : ''}
         <p class="small muted">${t('bl_after')}</p>
         <p class="tiny muted ltr">ID: ${esc(ctx.bid)}</p>
+        ${legalLinks()}
       </div></section>
     </div>
     <section class="panel c5"><div class="panel-h"><h2>${t('bl_history')}</h2></div><div class="panel-b">

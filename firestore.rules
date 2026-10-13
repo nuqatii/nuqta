@@ -95,6 +95,14 @@ service cloud.firestore {
         allow create, update: if owner(bid) && request.resource.data.email == email && request.resource.data.role in ['manager', 'staff', 'marketing'];
         allow delete: if owner(bid) || (signedIn() && request.auth.token.email == email);
       }
+      // A customer asking (from their own card) for their data to be deleted. Only the owner reads and acts on it.
+      match /deletionRequests/{cid} {
+        allow create: if request.resource.data.keys().hasOnly(['cardToken', 'memberNumber', 'at'])
+          && get(/databases/$(db)/documents/cards/$(request.resource.data.cardToken)).data.customerId == cid
+          && get(/databases/$(db)/documents/cards/$(request.resource.data.cardToken)).data.businessId == bid;
+        allow update: if false;
+        allow read, delete: if owner(bid);
+      }
       // Payments the platform admin recorded. Owners can see their billing history.
       match /payments/{pid} {
         allow read: if owner(bid) || isAdmin();
@@ -194,7 +202,8 @@ service cloud.firestore {
         && getAfter(/databases/$(db)/documents/businesses/$(request.resource.data.businessId)/customers/$(request.resource.data.customerId)).data.cardToken == token;
       allow update: if (cardBizStaff() && request.resource.data.businessId == resource.data.businessId && request.resource.data.customerId == resource.data.customerId)
         || (hasRole(resource.data.businessId, ['marketing']) && onlyChanged(['firstName', 'profile', 'updatedAt']))
-        || onlyChanged(['profile']);
+        || onlyChanged(['profile'])
+        || (onlyChanged(['deletionRequestedAt']) && request.resource.data.deletionRequestedAt is number);   // customer asks to delete their data
       allow delete: if false;
 
       match /activity/{id} {
