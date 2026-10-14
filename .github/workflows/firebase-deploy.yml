@@ -10,6 +10,7 @@ on:
       - 'firestore.rules'
       - 'assets/js/config.js'
       - 'assets/js/core/loyalty.js'
+      - 'assets/js/ui/icons.js'
       - 'firebase.json'
       - '.github/workflows/firebase-deploy.yml'
   workflow_dispatch: {}
@@ -43,7 +44,7 @@ jobs:
         if: steps.key.outputs.ok == 'true'
         run: |
           mkdir -p functions/shared
-          cp assets/js/core/loyalty.js assets/js/config.js functions/shared/
+          cp assets/js/core/loyalty.js assets/js/config.js assets/js/ui/icons.js functions/shared/
 
       - name: Install function packages
         if: steps.key.outputs.ok == 'true'
