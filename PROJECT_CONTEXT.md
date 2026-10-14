@@ -1,6 +1,6 @@
 # Nuqta (نقطة) — project context
 
-*Last updated: 13 Oct 2026. "Nuqta" is a placeholder product name (set in `assets/js/config.js` → `APP_NAME`).*
+*Last updated: 14 Oct 2026. "Nuqta" is a placeholder product name (set in `assets/js/config.js` → `APP_NAME`).*
 
 ## What it is
 A multi-tenant SaaS for restaurants, cafés, salons and shops in **Damascus, Syria**: each business creates its own branded digital loyalty card, rewards, tiers, customer CRM, campaigns and staff accounts. Customers join by scanning a QR code — no app, no password. **Arabic-first with full English (RTL/LTR).** Separate product from WafaCard and from the phone-number loyalty idea.
@@ -16,9 +16,9 @@ A multi-tenant SaaS for restaurants, cafés, salons and shops in **Damascus, Syr
 
 ## How I deploy (important)
 - I upload files through the **GitHub website** (Add file → Upload files, drag the *contents* of the `nuqta` folder so `index.html` is at the repo root). My laptop runs Windows; no command line.
-- Whenever `firestore.rules` changes I must paste it into **Firebase → Firestore → Rules → Publish**. If code and rules are out of sync, creating businesses fails.
+- **Auto-deploy (once set up, see GOOGLE_WALLET_SETUP.md part 4):** GitHub Actions (`.github/workflows/firebase-deploy.yml`) deploys `functions/` and `firestore.rules` whenever they, `config.js` or `loyalty.js` change, using the repo secret `FIREBASE_SERVICE_ACCOUNT`. Until that secret exists, rules must still be pasted into **Firebase → Firestore → Rules → Publish** by hand. If code and rules are out of sync, creating businesses fails.
 - Indexes created so far: composite `activity (customerId ↑, at ↓)`, `redemptions (status ↑, createdAt ↓)`; single-field collection-group exemptions `members.uid`, `invites.email`.
-- After deploying, phones may need a refresh (service worker is network-first, cache `nuqta-v3`).
+- After deploying, phones may need a refresh (service worker is network-first, cache `nuqta-v4`).
 
 ## Tech stack & structure
 Static site, plain HTML/CSS/JS ES modules, **no build step**, Firebase JS SDK 12.19.0 from gstatic. One service layer runs on both backends.
@@ -32,7 +32,10 @@ assets/js/data/service.js    every read/write; db-firestore.js / db-memory.js ad
 assets/js/ui/card.js         the loyalty card (laid out like an Apple/Google Wallet pass)
 assets/js/pages/*.js         one module per screen (biz-*.js business, customer.js, admin.js, auth.js)
 firestore.rules              tenant isolation + roles + subscription lock, enforced server-side
-tests/                       node --test (logic, journeys, tenant isolation, i18n); tests/rules needs Java emulator
+functions/                   server function `gwallet` (Google Wallet: save/sync/logo), Node 22, region europe-west1;
+                              shared/ = copies of loyalty.js + config.js made at deploy time (not in the repo)
+.github/workflows/           firebase-deploy.yml (auto-deploy functions + rules)
+tests/                       node --test (logic, journeys, tenant isolation, i18n, gwallet); tests/rules needs Java emulator
 ```
 
 ## Data model (Firestore)
@@ -49,15 +52,18 @@ tests/                       node --test (logic, journeys, tenant isolation, i18
 - **Trials & subscriptions:** every new business gets a free trial (default 30 days, admin can extend per business). 3 grace days after expiry, then **soft lock** (owner sees only Subscription page, staff see a notice, join page paused, customer cards read-only; no data deleted). **Payments are manual**: business pays via Sham Cash / Syriatel Cash / transfer / cash and confirms on WhatsApp; admin clicks **Record payment** (1/3/6/12 months), paid time is added after any remaining time. Only the admin can change plan/trialEndsAt/paidUntil (rules enforce).
 - **Admin account is admin only** — never owns a business, always lands on admin.html; to run my own shop I sign up with a different email.
 - **Legal:** `privacy.html` and `terms.html` (Arabic + English; Arabic is the reference version). Operator is a Syrian business based in Syria; governed by Syrian law, Damascus courts; contact by WhatsApp +963953667748 (no email yet); business data deleted 90 days after an account ends. Details live in `config.js → LEGAL`; texts in `assets/js/core/legal-text.js`. A business must tick "I agree to the Terms and Privacy Policy" before it is created (stored as `terms {version, acceptedAt, acceptedBy}` on the business). Customers have **Delete my data** on their card's Profile tab → owner sees a notice on Customers and deletes (name/phone/contact removed, card stops working, purchases stay anonymous). Owners can also delete any customer from the profile ⋯ menu.
+- **Google Wallet (built 14 Oct, waiting for setup):** "Add to Google Wallet" button under the card on `rewards.html` (hidden while `config.js → GOOGLE_WALLET.issuerId` is empty). It links to the function `gwallet/save?t=<token>`, which upserts a LoyaltyClass per business (`<issuer>.biz_<bid>`) and a LoyaltyObject per card (`<issuer>.card_<bid>_<cid>`), marks `walletGoogle: true` on the card + customer, and redirects to Google's save page. No customer login; the pass returns on a new phone through the Google account. Signing is keyless (the function's default compute service account signs via the IAM Credentials API). After purchases, redemptions, adjustments, name changes and deletions, the cashier's browser pings `gwallet/sync?t=` (only for customers with walletGoogle); design changes ping `sync?b=`. The logo is served from Firestore's data URL by `gwallet/logo`. Pass contents: points / stamps "x/goal" / spend, rewards ready, tier, QR = scanId, link back to the card. The privacy policy mentions Google Wallet. Apple Wallet comes later ($99/yr Apple Developer).
 - Campaigns: pick audience from automatic groups (new/active/loyal/VIP/at risk/inactive), ready-made groups, or custom segments; sending is one-tap WhatsApp links per customer or CSV export.
 
 ## Constraints discovered (Syria)
 - **Meta lists Syria as ineligible for the WhatsApp Business Platform** — no official automated WhatsApp to Syrian numbers. Unofficial automation risks bans; not used.
 - **Twilio blocks all SMS to Syria since 15 Sep 2025.** Some gateways (e.g. SMS.to) claim delivery; a local Syriatel/MTN bulk-SMS provider is likely needed — untested.
 - Google services began returning to Syria in Jan 2026; Firebase works from Damascus so far.
+- **Apple Wallet and Google Wallet both work for customers in Damascus**: a local coffee shop's Highlight Cards customers add passes to both.
 - Automatic messages (welcome, reward ready, tier up, birthday, win-back) are saved with on/off but **nothing sends them yet** — needs a provider + Firebase Cloud Functions (Blaze plan).
 
 ## Open items / next steps
+- [ ] **Google Wallet setup** — follow GOOGLE_WALLET_SETUP.md: Blaze plan, enable APIs, IAM role, deploy key secret, issuer account + invite the service account, paste the Issuer ID in config.js, test, then official button images + request publishing access.
 - [ ] Confirm the latest zip (12 Oct: stamp rounds, admin separation, PNG app icons) is uploaded and rules published.
 - [ ] Android install of "My cards" — was failing because live manifest only had an SVG icon; fixed in latest zip. If still stuck: phone lacks Google Play services → use ⋮ → Add to home screen → Create shortcut.
 - [ ] Add the registered business name in `config.js → LEGAL.name` and an email when available; have a lawyer review the privacy policy and terms.
@@ -65,4 +71,4 @@ tests/                       node --test (logic, journeys, tenant isolation, i18
 - [ ] Set real plan prices, payment instructions and WhatsApp number in Admin → Billing (placeholders $15/$30/$60).
 - [ ] Run `npm run test:rules` once (needs Java) — security rules have never been tested in the emulator.
 - [ ] Hardening before real scale: move points/redemption/join into Cloud Functions; Firebase App Check; phone verification; join page currently reveals if a number is already a member.
-- [ ] Possible next features: card notifications (push) for automatic messages, pluggable SMS sender, optional group filter on automatic messages, Apple/Google Wallet passes, phone-number recovery of cards, final product name.
+- [ ] Possible next features: card notifications (push) for automatic messages, pluggable SMS sender, optional group filter on automatic messages, Apple Wallet passes, phone-number recovery of cards, final product name.

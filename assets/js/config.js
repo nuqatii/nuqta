@@ -20,13 +20,24 @@ export const CONFIG = {
   },
   FIREBASE_SDK_VERSION: '12.19.0',
 
+  // Public address of the site (used inside wallet passes to link back to the card).
+  SITE_URL: 'https://nuqatii.github.io/nuqta/',
+
+  // Google Wallet. Leave issuerId empty to hide the "Add to Google Wallet" button.
+  // issuerId comes from pay.google.com/business/console (see GOOGLE_WALLET_SETUP.md).
+  GOOGLE_WALLET: {
+    issuerId: '',
+    region: 'europe-west1',     // where the server function runs
+    officialButton: false,      // true once Google's official button images are in assets/img (setup guide, part 6)
+  },
+
   // Shown in the Privacy Policy and Terms of Service.
   LEGAL: {
     name: { en: 'Nuqta', ar: 'نقطة' },       // put the registered business name here once you have it
     country: { en: 'Syria', ar: 'سوريا' },
     whatsapp: '+963953667748',
     email: '',                                  // optional; leave empty to hide
-    updated: '2026-10-13',                      // change when you edit the texts
+    updated: '2026-10-14',                      // change when you edit the texts
     retentionDays: 90,
   },
 
@@ -41,6 +52,13 @@ export function resolveMode() {
   if (s) return s;
   if (CONFIG.MODE === 'firebase' && !CONFIG.FIREBASE.projectId) return 'demo';
   return CONFIG.MODE;
+}
+
+// Address of the Google Wallet server function, or '' when Google Wallet is off.
+export function walletFnUrl() {
+  const g = CONFIG.GOOGLE_WALLET;
+  if (!g?.issuerId || !CONFIG.FIREBASE.projectId) return '';
+  return `https://${g.region}-${CONFIG.FIREBASE.projectId}.cloudfunctions.net/gwallet`;
 }
 
 // Base URL of the deployed site (works on GitHub Pages sub-paths).

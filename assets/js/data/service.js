@@ -2,6 +2,7 @@
 // It runs unchanged on the demo store and on Firestore; firestore.rules enforce the
 // same tenant + role boundaries server-side.
 import * as L from '../core/loyalty.js';
+import { walletFnUrl } from '../config.js';
 
 const now = () => Date.now();
 const fail = (code, extra) => { const e = new Error(code); e.code = code; Object.assign(e, extra); throw e; };
@@ -31,6 +32,17 @@ export function createService({ db, auth, mode }) {
   };
   const roleCache = new Map();
   const user = () => auth.current();
+  // Tells the Google Wallet function to refresh a saved pass (fire and forget; never blocks the cashier).
+  function walletPing(query) {
+    const base = mode === 'firebase' ? walletFnUrl() : '';
+    if (!base) return;
+    const url = `${base}/sync?${query}`;
+    try {
+      if (globalThis.navigator?.sendBeacon?.(url)) return;
+      globalThis.fetch?.(url, { method: 'POST', mode: 'no-cors', keepalive: true }).catch(() => {});
+    } catch { /* ignore */ }
+  }
+  const pingCard = (c) => { if (c?.walletGoogle && c.cardToken) walletPing('t=' + encodeURIComponent(c.cardToken)); };
 
   async function roleIn(bid) {
     const u = user(); if (!u) return null;
@@ -138,6 +150,7 @@ export function createService({ db, auth, mode }) {
       const clean = {}; for (const k of allowed) if (k in patch) clean[k] = patch[k];
       if (clean.design || clean.colors || clean.logo !== undefined || clean.tiers) clean.designVersion = db.inc(1);
       await db.update(P.biz(bid), clean);
+      if (['name', 'logo', 'colors', 'design', 'lang'].some((k) => k in clean)) walletPing('b=' + encodeURIComponent(bid));
       await audit(bid, 'business.update', { fields: Object.keys(clean) });
     },
 
@@ -175,6 +188,7 @@ export function createService({ db, auth, mode }) {
       const merged = { ...c, ...clean };
       ops.push({ op: 'update', path: P.card(c.cardToken), data: { firstName: merged.firstName, profile: profileOf(merged), updatedAt: now() } });
       await db.batch(ops);
+      if ('firstName' in clean) pingCard(c);
     },
 
     // Shared by staff "add customer" and public "join".
@@ -252,7 +266,7 @@ export function createService({ db, auth, mode }) {
         }
         tx.set(P.stats(bid), { statTxns: db.inc(1), statRevenue: db.inc(amount), statPoints: db.inc(r.earned), lastActivityAt: t }, { merge: true });
         return { id: evId, earned: r.earned, balance: r.patch.points, unlocked: r.unlocked, tierUp: r.tierUp, customer: { id: customerId, ...c, ...r.patch } };
-      });
+      }).then((r) => { pingCard(r.customer); return r; });
     },
     async adjustPoints(bid, customerId, delta, note) {
       await need(bid, 'program');
@@ -270,8 +284,8 @@ export function createService({ db, auth, mode }) {
         tx.update(P.card(c.cardToken), cardFields({ ...c, ...patch }));
         tx.set(P.sub(bid, 'activity', evId), ev);
         tx.set(`cards/${c.cardToken}/activity/${evId}`, publicEvent(ev));
-        return patch;
-      }).then(async (r) => { await audit(bid, 'points.adjust', { customerId, delta, note }); return r; });
+        return { ...patch, _c: c };
+      }).then(async ({ _c, ...r }) => { pingCard(_c); await audit(bid, 'points.adjust', { customerId, delta, note }); return r; });
     },
     async listActivity(bid, { customerId, since, limit } = {}) {
       await need(bid, 'transactions');
@@ -322,7 +336,7 @@ export function createService({ db, auth, mode }) {
         const c = await tx.get(P.sub(bid, 'customers', red.customerId));
         const rw = await tx.get(P.sub(bid, 'rewards', red.rewardId));
         return S._confirm(tx, bid, { code, red, c, rw, u });
-      });
+      }).then((r) => { pingCard(r.customer); return r; });
     },
     // Staff redeems directly for a customer standing at the counter (no phone needed).
     async redeemForCustomer(bid, customerId, rewardId) {
@@ -335,7 +349,7 @@ export function createService({ db, auth, mode }) {
         if (!c || !rw) fail('not-found');
         const red = { customerId, cardToken: c.cardToken, rewardId, rewardName: rw.name, rewardNameAr: rw.nameAr || null, cost: rw.cost, status: 'pending', createdAt: now(), source: 'staff' };
         return S._confirm(tx, bid, { code, red, c, rw, u, create: true });
-      });
+      }).then((r) => { pingCard(r.customer); return r; });
     },
     _confirm(tx, bid, { code, red, c, rw, u, create }) {
       if (!c) fail('not-found');
@@ -423,6 +437,7 @@ export function createService({ db, auth, mode }) {
       if (c.phone) ops.push({ op: 'delete', path: P.sub(bid, 'phones', c.phone) });
       if (c.cardToken) ops.push({ op: 'update', path: P.card(c.cardToken), data: { deleted: true, firstName: '', profile: {}, points: 0, updatedAt: t } });
       await db.batch(ops);
+      pingCard(c);
       await audit(bid, 'customer.delete', { customerId: cid, memberNumber: c.memberNumber });
     },
 

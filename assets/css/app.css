@@ -514,3 +514,13 @@ a.wtile:active { transform: scale(.985); }
 @media (max-width: 560px) { .legal .toc ol { columns: 1; } }
 .legal-links { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; font-size: .82rem; }
 .legal-links a { color: var(--muted); }
+
+/* Google Wallet button */
+.gw { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 4px 0 2px; }
+.gw-link { display: inline-flex; text-decoration: none; }
+.gw-link img { height: 48px; width: auto; display: block; }
+.gw-btn { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px; border-radius: 999px; background: #1F1F1F; color: #fff; font-weight: 600; font-size: 15px; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.gw-btn svg { width: 20px; height: 20px; }
+.gw-link:active .gw-btn { transform: scale(.98); }
+.gw p { text-align: center; margin: 0; display: flex; align-items: center; gap: 4px; }
+.gw p svg { width: 14px; height: 14px; }

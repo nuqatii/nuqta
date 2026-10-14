@@ -8,7 +8,8 @@
     "start": "python3 -m http.server 8080",
     "test": "node --test tests/service.test.mjs tests/i18n.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore \"node --test tests/rules/rules.test.mjs\"",
-    "deploy:rules": "firebase deploy --only firestore"
+    "deploy:rules": "firebase deploy --only firestore",
+    "test:functions": "npm --prefix functions install && node --test tests/gwallet.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",

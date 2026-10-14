@@ -138,3 +138,6 @@ These are deliberate MVP trade-offs, listed so they don't get forgotten:
 npm test             # loyalty logic, service journeys, tenant isolation, i18n completeness
 npm run test:rules   # Firestore security rules in the emulator (Java required)
 ```
+
+## Google Wallet
+Customers can add their card to Google Wallet (no sign-in). Server code is in `functions/`; it deploys automatically from GitHub. One-time setup: **GOOGLE_WALLET_SETUP.md**.
