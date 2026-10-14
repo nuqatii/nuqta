@@ -363,7 +363,7 @@ const ar = {
   c_available: 'يمكنك الاستبدال', c_locked: 'قريباً', c_need_more: 'ينقصك {n} {unit}', c_redeem: 'استبدال',
   c_code_title: 'اعرض هذا الرمز على الكاشير', c_code_exp: 'صالح حتى {t}', c_code_done: 'استُخدم {d}',
   c_no_activity: 'ستظهر زياراتك هنا.', c_save_card: 'أضف الصفحة إلى الشاشة الرئيسية لتبقى بطاقتك قريبة.',
-  gw_add: 'أضف إلى محفظة Google', gw_hint: 'احفظ البطاقة في محفظة Google — تتحدّث نقاطك تلقائياً.', gw_in: 'محفوظة في محفظة Google. اضغط مجدداً إذا غيّرت هاتفك.',
+  gw_add: 'الإضافة إلى محفظة Google', gw_hint: 'احفظ البطاقة في محفظة Google — تتحدّث نقاطك تلقائياً.', gw_in: 'محفوظة في محفظة Google. اضغط مجدداً إذا غيّرت هاتفك.',
   c_wallet_soon: 'محفظة Apple وGoogle قريباً', c_member: 'العضو', c_tier_benefits: 'مزاياك',
   c_profile_saved: 'تم حفظ معلوماتك', c_install: 'أضف إلى الشاشة الرئيسية', c_card_missing: 'رابط البطاقة غير صالح. اطلب من الكاشير إرساله مجدداً.',
   c_open_codes: 'رموز مكافآتك', c_rewards_count: '{n} مكافآت جاهزة', c_rewards_count_one: 'مكافأة واحدة جاهزة', c_next_reward: 'المكافأة القادمة', c_stamps_left: 'باقي {n} للمكافأة',
