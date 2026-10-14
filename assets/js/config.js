@@ -26,7 +26,7 @@ export const CONFIG = {
   // Google Wallet. Leave issuerId empty to hide the "Add to Google Wallet" button.
   // issuerId comes from pay.google.com/business/console (see GOOGLE_WALLET_SETUP.md).
   GOOGLE_WALLET: {
-    issuerId: '',
+    issuerId: '3388000000023216599',
     region: 'europe-west1',     // where the server function runs
     officialButton: false,      // true once Google's official button images are in assets/img (setup guide, part 6)
   },
