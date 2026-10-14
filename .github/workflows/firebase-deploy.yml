@@ -1,0 +1,59 @@
+# Deploys the server function (Google Wallet) and the Firestore security rules
+# every time you upload changes to them on GitHub. One-time setup: GOOGLE_WALLET_SETUP.md, part 4.
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'assets/js/config.js'
+      - 'assets/js/core/loyalty.js'
+      - 'firebase.json'
+      - '.github/workflows/firebase-deploy.yml'
+  workflow_dispatch: {}
+
+concurrency: firebase-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the deploy key is set up
+        id: key
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret is missing - skipping deploy. See GOOGLE_WALLET_SETUP.md part 4."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: 22
+
+      - name: Share site code with the function
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          mkdir -p functions/shared
+          cp assets/js/core/loyalty.js assets/js/config.js functions/shared/
+
+      - name: Install function packages
+        if: steps.key.outputs.ok == 'true'
+        run: npm install --prefix functions --no-audit --no-fund
+
+      - uses: google-github-actions/auth@v2
+        if: steps.key.outputs.ok == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy functions and Firestore rules
+        if: steps.key.outputs.ok == 'true'
+        run: npx --yes firebase-tools@14 deploy --only functions,firestore:rules --project nuqati-39894 --non-interactive --force
