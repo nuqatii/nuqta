@@ -42,14 +42,14 @@ export function buildClass({ issuerId, bid, business, logoUrl }) {
   };
 }
 
-export function buildObject({ issuerId, token, card, business, rewards, siteUrl }) {
+export function buildObject({ issuerId, token, card, business, rewards, siteUrl, heroUrl }) {
   const main = langOf(business);
   const prog = business.program || { type: 'points' };
   const live = liveRewards(rewards);
   const points = Math.max(0, Math.floor(card.points || 0));
-  let primary;
+  let primary, st = null;
   if (L.isStampy(prog)) {
-    const st = L.stampState(prog, live, points);
+    st = L.stampState(prog, live, points);
     const w = word(prog.type === 'visits' ? 'visits' : 'stamps', main);
     primary = { label: w.text, localizedLabel: w.localized, balance: { string: `${st.progress}/${st.goal}` } };
   } else if (prog.type === 'spend') {
@@ -73,6 +73,10 @@ export function buildObject({ issuerId, token, card, business, rewards, siteUrl 
     linksModuleData: { uris: [{ id: 'card', uri: `${siteUrl}rewards.html?c=${token}`, description: TXT[main].open, localizedDescription: word('open', main).localized }] },
     textModulesData: [],
   };
+  // Stamp cards get a picture of the stamp grid (Google has no stamp layout of its own).
+  if (st && heroUrl && !card.deleted) {
+    obj.heroImage = { sourceUri: { uri: heroUrl(st) }, contentDescription: loc(`${st.progress} of ${st.goal} stamps`, `${st.progress} من ${st.goal} أختام`, main) };
+  }
   const tiers = business.tiers || [];
   if (tiers.length > 1) {
     const tier = L.tierFor(tiers, card.lifetimePoints || 0);

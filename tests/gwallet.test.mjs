@@ -7,6 +7,7 @@ import { generateKeyPairSync, createVerify } from 'node:crypto';
 mkdirSync('functions/shared', { recursive: true });
 copyFileSync('assets/js/core/loyalty.js', 'functions/shared/loyalty.js');
 copyFileSync('assets/js/config.js', 'functions/shared/config.js');
+copyFileSync('assets/js/ui/icons.js', 'functions/shared/icons.js');
 
 const { buildClass, buildObject, objectIdFor } = await import('../functions/pass.js');
 const { createHandler } = await import('../functions/handler.js');
@@ -31,6 +32,18 @@ test('stamp card pass shows progress, rewards ready, tier and a link back', () =
   assert.equal(o.barcode.value, 'NQMAYA2026');
   assert.equal(o.textModulesData[0].body, 'ذهبي');
   assert.equal(o.linksModuleData.uris[0].uri, `https://x.io/nuqta/rewards.html?c=${TOKEN}`);
+  const h = buildObject({ issuerId: ISS, token: TOKEN, card: CARD, business: BIZ, rewards: REWARDS, siteUrl: 'https://x.io/', heroUrl: (st) => `img?p=${st.progress}&g=${st.goal}&r=${st.ready}` });
+  assert.equal(h.heroImage.sourceUri.uri, 'img?p=3&g=8&r=2');
+});
+
+test('stamp image renders as a PNG for every grid size', async () => {
+  const { stampsPng } = await import('../functions/stamps.js');
+  for (const goal of [2, 6, 10, 20]) {
+    const png = Buffer.from(await stampsPng({ business: BIZ, progress: goal - 1, goal, ready: 1 }));
+    assert.equal(png.subarray(1, 4).toString(), 'PNG');
+    assert.equal(png.readUInt32BE(16), 1032);
+    assert.equal(png.readUInt32BE(20), 336);
+  }
 });
 
 test('points and spend programs show a number; deleted cards go inactive and anonymous', () => {
@@ -126,6 +139,10 @@ test('save creates class + object, marks the card, and redirects to Google', asy
   docs['businesses/urban01'] = { ...BIZ, name: 'Urban Coffee Co' };
   await call(h, '/gwallet/sync', { b: 'urban01' });
   assert.equal(g.classes[`${ISS}.biz_urban01`].issuerName, 'Urban Coffee Co');
+  assert.match(g.objects[objectIdFor(ISS, CARD)].heroImage.sourceUri.uri, /\/gwallet\/stamps\?b=urban01&p=1&g=8&r=1&v=3$/);
+  const img = await call(h, '/gwallet/stamps', { b: 'urban01', p: '1', g: '8', r: '1' });
+  assert.equal(img.headers['Content-Type'], 'image/png');
+  assert.equal((await call(h, '/gwallet/stamps', { b: 'urban01', p: '9', g: '8', r: '1' })).statusCode, 404);
 });
 
 test('sync never creates passes; bad tokens and deleted cards are refused; logo is served', async () => {

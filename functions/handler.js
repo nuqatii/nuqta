@@ -1,6 +1,7 @@
 // Request handler for /gwallet/*. Firestore and Google are passed in so tests can fake them.
 import { buildClass, buildObject, classIdFor, saveClaims } from './pass.js';
 import { saveUrl } from './google.js';
+import { stampsPng } from './stamps.js';
 
 const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
@@ -13,6 +14,8 @@ export function createHandler({ firestore, google, config }) {
   const get = async (path) => { const s = await firestore.doc(path).get(); return s.exists ? { id: s.id, ...s.data() } : null; };
   const rewardsOf = async (bid) => (await firestore.collection(`businesses/${bid}/rewards`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
   const logoUrl = (bid, b) => `${fnBase()}/logo?b=${bid}&v=${b.designVersion || 1}`;
+  // The image depends only on the business design and the numbers, so every customer at the same step shares one cached image.
+  const heroUrlFor = (bid, b) => (st) => `${fnBase()}/stamps?b=${bid}&p=${st.progress}&g=${st.goal}&r=${st.ready > 0 ? 1 : 0}&v=${b.designVersion || 1}`;
 
   async function loadCard(token) {
     if (!TOKEN_RE.test(token || '')) return null;
@@ -37,7 +40,7 @@ export function createHandler({ firestore, google, config }) {
     const iss = issuerId();
     const bid = d.card.businessId;
     await google.upsertClass(buildClass({ issuerId: iss, bid, business: d.business, logoUrl: logoUrl(bid, d.business) }));
-    const obj = buildObject({ issuerId: iss, token, ...d, siteUrl });
+    const obj = buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) });
     await google.upsertObject(obj);
     const t = Date.now();
     await firestore.doc(`cards/${token}`).set({ walletGoogle: true, walletStatus: 'google', walletGoogleAt: t }, { merge: true });
@@ -52,7 +55,7 @@ export function createHandler({ firestore, google, config }) {
     const iss = issuerId();
     if (token) {
       const d = await loadCard(token);
-      if (d && d.card.walletGoogle) await google.updateObjectIfExists(buildObject({ issuerId: iss, token, ...d, siteUrl }));
+      if (d && d.card.walletGoogle) await google.updateObjectIfExists(buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) }));
     } else if (ID_RE.test(bid)) {
       const business = await get(`businesses/${bid}`);
       if (business && (await google.getClass(classIdFor(iss, bid)))) await google.upsertClass(buildClass({ issuerId: iss, bid, business, logoUrl: logoUrl(bid, business) }));
@@ -69,6 +72,16 @@ export function createHandler({ firestore, google, config }) {
     res.set('Content-Type', m[1]).set('Cache-Control', 'public, max-age=86400').send(Buffer.from(m[2], 'base64'));
   }
 
+  async function stamps(req, res) {
+    const bid = String(req.query.b || '');
+    const int = (v, lo, hi) => { const n = Number.parseInt(v, 10); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+    const goal = int(req.query.g, 2, 20); const progress = int(req.query.p, 0, 20); const ready = int(req.query.r, 0, 1);
+    const b = ID_RE.test(bid) && goal !== null && progress !== null && progress < goal && ready !== null ? await get(`businesses/${bid}`) : null;
+    if (!b) return page(res, 404, 'Not found.', 'غير موجود.');
+    const png = await stampsPng({ business: b, progress, goal, ready });
+    res.set('Content-Type', 'image/png').set('Cache-Control', 'public, max-age=604800').send(Buffer.from(png));
+  }
+
   return async function handler(req, res) {
     res.set('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') return res.status(204).send('');
@@ -78,6 +91,7 @@ export function createHandler({ firestore, google, config }) {
       if (route === 'save') return await save(req, res);
       if (route === 'sync') return await sync(req, res);
       if (route === 'logo') return await logo(req, res);
+      if (route === 'stamps' || route === 'stamps.png') return await stamps(req, res);
       return page(res, 404, 'Not found.', 'غير موجود.');
     } catch (e) {
       console.error(route, e);

@@ -34,6 +34,7 @@ Google Cloud console → ☰ → **APIs & Services → Library**. Search for eac
 1. **Google Wallet API**
 2. **IAM Service Account Credentials API** (lets the function sign passes without a key file)
 3. **Compute Engine API** (this creates the service account above; it costs nothing by itself)
+4. **Cloud Billing API** (the deploy checks that the project is on Blaze)
 
 ## Part 3 — Let the function sign Wallet links
 
@@ -134,6 +135,7 @@ While in demo mode only invited accounts can save passes. To open it to all cust
 | What you see | Fix |
 |---|---|
 | Actions: *"Permission denied"* or *"does not have permission"* | Check the 4 roles in Part 4a, then **Run workflow** again |
+| Actions: *"Cloud Billing API has not been used…"* | Enable **Cloud Billing API** (Part 2), wait 2 minutes, then **Run workflow** |
 | Actions: *"Default service account … does not exist"* | Enable **Compute Engine API** (Part 2), wait 2 minutes, then run again |
 | Actions: build fails mentioning *Cloud Build* | IAM → find `605724800372-compute@…` → add role *Cloud Build Service Account* → run again |
 | The button opens a page saying *"Google Wallet is not set up yet"* | `issuerId` is empty, or the deploy after editing `config.js` hasn't finished |
