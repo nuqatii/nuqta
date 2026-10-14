@@ -4,12 +4,13 @@
 import { GoogleAuth } from 'google-auth-library';
 
 const API = 'https://walletobjects.googleapis.com/walletobjects/v1';
-const SCOPE = 'https://www.googleapis.com/auth/wallet_object.issuer';
+// Wallet scope for passes; cloud-platform so the same identity may call the IAM API to sign links.
+const SCOPES = ['https://www.googleapis.com/auth/wallet_object.issuer', 'https://www.googleapis.com/auth/cloud-platform'];
 
 const b64url = (s) => Buffer.from(s).toString('base64url');
 const statusOf = (e) => e?.response?.status || e?.status || e?.code;
 
-export function createGoogle({ auth = new GoogleAuth({ scopes: [SCOPE] }) } = {}) {
+export function createGoogle({ auth = new GoogleAuth({ scopes: SCOPES }) } = {}) {
   let clientP = null;
   const client = () => (clientP ||= auth.getClient());
   async function call(method, path, data) {
