@@ -37,7 +37,7 @@ export const CONFIG = {
     country: { en: 'Syria', ar: 'سوريا' },
     whatsapp: '+963953667748',
     email: '',                                  // optional; leave empty to hide
-    updated: '2026-10-14',                      // change when you edit the texts
+    updated: '2026-10-15',                      // change when you edit the texts
     retentionDays: 90,
   },
 

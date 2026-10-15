@@ -9,7 +9,7 @@ export const PRIVACY = {
     intro: '{name} is a loyalty-card service used by restaurants, cafés, shops and salons. This policy explains what information we collect, why, who can see it, and the choices you have. It covers customers who join a loyalty program and businesses that use {name}.',
     sections: [
       ['Who is responsible for your information',
-        'Each business that runs a loyalty program on {name} decides how it uses the information of the customers who join it. {name} operates the service on the business’s behalf and protects that information. {name} is operated from {country}.'],
+        'Each business that runs a loyalty program on {name} decides how it uses the information of the customers who join it. {name} operates the service on the business’s behalf and protects that information.'],
       ['What we collect from customers', [
         'What you enter when you join: first name and mobile number; and, only if you choose, email address and birthday.',
         'What you may add later on your card’s Profile tab: last name and preferred way to be contacted.',
@@ -36,7 +36,7 @@ export const PRIVACY = {
       ['Who can see your information', [
         'Only the business you joined, and only its staff accounts with the right access. Each business sees its own customers only; businesses never see each other’s customers.',
         'The {name} team can see totals (such as number of members per business) to operate the service, but not customer names or phone numbers, except when needed to fix a problem or when the law requires it.',
-        'Service providers that host the service for us: Google Firebase (database and sign-in) and GitHub Pages (website). Their servers may be outside {country}.',
+        'Service providers that host the service for us: Google Firebase (database and sign-in) and GitHub Pages (website). Their servers may be in other countries.',
         'Google Wallet, only if you choose "Add to Google Wallet": your first name, member number, balance and card code are sent to Google to show the card on your phone. Google\'s own privacy policy then applies to the copy in your Google account.',
         'We never sell your information, and we do not share it with advertisers.',
       ]],
@@ -65,7 +65,7 @@ export const PRIVACY = {
     intro: '{name} خدمة بطاقات ولاء تستخدمها المطاعم والمقاهي والمتاجر والصالونات. توضح هذه السياسة المعلومات التي نجمعها، ولماذا، ومن يستطيع رؤيتها، والخيارات المتاحة لك. وهي تشمل الزبائن الذين ينضمون إلى برامج الولاء والأنشطة التجارية التي تستخدم {name}.',
     sections: [
       ['من المسؤول عن معلوماتك',
-        'كل نشاط تجاري يدير برنامج ولاء على {name} يحدد كيفية استخدام معلومات الزبائن الذين ينضمون إليه. تشغّل {name} الخدمة نيابةً عن النشاط التجاري وتحمي هذه المعلومات. يتم تشغيل {name} من {country}.'],
+        'كل نشاط تجاري يدير برنامج ولاء على {name} يحدد كيفية استخدام معلومات الزبائن الذين ينضمون إليه. تشغّل {name} الخدمة نيابةً عن النشاط التجاري وتحمي هذه المعلومات.'],
       ['ما نجمعه من الزبائن', [
         'ما تدخله عند الانضمام: الاسم الأول ورقم الموبايل، والبريد الإلكتروني وتاريخ الميلاد فقط إذا اخترت إضافتهما.',
         'ما قد تضيفه لاحقاً في تبويب «حسابي» في بطاقتك: الكنية ووسيلة التواصل المفضلة.',
@@ -92,7 +92,7 @@ export const PRIVACY = {
       ['من يستطيع رؤية معلوماتك', [
         'النشاط الذي انضممت إليه فقط، ومن خلال حسابات موظفيه التي تملك الصلاحية المناسبة. كل نشاط يرى زبائنه فقط، ولا ترى الأنشطة زبائن بعضها أبداً.',
         'يستطيع فريق {name} رؤية الأرقام الإجمالية (مثل عدد الأعضاء لكل نشاط) لتشغيل الخدمة، لكن ليس أسماء الزبائن أو أرقامهم، إلا عند الحاجة لإصلاح مشكلة أو عندما يتطلب القانون ذلك.',
-        'مزوّدو الخدمات الذين يستضيفون الخدمة لنا: Google Firebase (قاعدة البيانات وتسجيل الدخول) وGitHub Pages (الموقع). قد تكون خوادمهم خارج {country}.',
+        'مزوّدو الخدمات الذين يستضيفون الخدمة لنا: Google Firebase (قاعدة البيانات وتسجيل الدخول) وGitHub Pages (الموقع). قد تكون خوادمهم في دول أخرى.',
         'محفظة Google، فقط إذا اخترت "أضف إلى محفظة Google": يُرسل اسمك الأول ورقم عضويتك ورصيدك ورمز بطاقتك إلى Google لعرض البطاقة على هاتفك، وتسري سياسة خصوصية Google على النسخة المحفوظة في حسابك.',
         'لا نبيع معلوماتك أبداً، ولا نشاركها مع المعلنين.',
       ]],
