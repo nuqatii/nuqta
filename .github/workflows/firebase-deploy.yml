@@ -46,6 +46,19 @@ jobs:
           mkdir -p functions/shared
           cp assets/js/core/loyalty.js assets/js/config.js assets/js/ui/icons.js functions/shared/
 
+      - name: Apple Wallet signing keys (only if set up)
+        if: steps.key.outputs.ok == 'true'
+        env:
+          APPLE_CERT: ${{ secrets.APPLE_PASS_CERT }}
+          APPLE_KEY: ${{ secrets.APPLE_PASS_KEY }}
+        run: |
+          if [ -n "$APPLE_CERT" ] && [ -n "$APPLE_KEY" ]; then
+            printf 'APPLE_CERT_B64=%s\nAPPLE_KEY_B64=%s\n' "$(printf '%s' "$APPLE_CERT" | base64 -w0)" "$(printf '%s' "$APPLE_KEY" | base64 -w0)" > functions/.env
+            echo "Apple Wallet keys added"
+          else
+            echo "Apple Wallet keys not set - skipping"
+          fi
+
       - name: Install function packages
         if: steps.key.outputs.ok == 'true'
         run: npm install --prefix functions --no-audit --no-fund
