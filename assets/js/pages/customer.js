@@ -1,6 +1,6 @@
 // Customer experience: join via QR (?b=slug) and the digital card app (?c=token). No login.
 import { getService } from '../data/index.js';
-import { CONFIG, walletFnUrl } from '../config.js';
+import { CONFIG, walletFnUrl, appleFnUrl } from '../config.js';
 import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName } from '../core/i18n.js';
 import { tierFor, nextTier, CHANNELS, canOperate, stampGoal, stampState, readyCount, isStampy } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, modal, qrSvg, errText, legalLink, legalLinks } from '../ui/ui.js';
@@ -32,6 +32,22 @@ function googleWalletButton(fn, token, card) {
     : `<span class="gw-btn">${icon('card')}${t('gw_add')}</span>`;
   return `<div class="gw"><a class="gw-link" href="${esc(href)}" rel="noopener">${face}</a>
     <p class="tiny muted">${card.walletGoogle ? `${icon('check')} ${t('gw_in')}` : t('gw_hint')}</p></div>`;
+}
+// "Add to Apple Wallet": downloads the signed .pkpass; Safari then shows Apple's "Add" screen.
+function appleWalletButton(fn, token, card) {
+  const href = `${fn}/pass?t=${encodeURIComponent(token)}`;
+  const face = CONFIG.APPLE_WALLET.officialButton
+    ? `<img src="assets/img/applewallet-${lang}.svg" alt="${esc(t('aw_add'))}" height="48">`
+    : `<span class="gw-btn">${icon('card')}${t('aw_add')}</span>`;
+  return `<div class="gw"><a class="gw-link" href="${esc(href)}">${face}</a>
+    <p class="tiny muted">${card.walletApple ? `${icon('check')} ${t('aw_in')}` : t('aw_hint')}</p></div>`;
+}
+const isAndroid = /android/i.test(navigator.userAgent);
+// Show the wallet that fits the phone: Apple on iPhone, Google on Android, both on a computer.
+function walletButtons(token, card, firebase) {
+  const g = firebase ? walletFnUrl() : '', a = firebase ? appleFnUrl() : '';
+  const showG = g && !isIOS, showA = a && !isAndroid;
+  return { any: !!(showG || showA), html: `${showA ? appleWalletButton(a, token, card) : ''}${showG ? googleWalletButton(g, token, card) : ''}` };
 }
 
 // ── Join ───────────────────────────────────────────────
@@ -129,11 +145,11 @@ async function cardApp(token) {
     const c = data.card; const tier = tierFor(b.tiers, c.lifetimePoints); const nx = nextTier(b.tiers, c.lifetimePoints);
     const stampy = b.program.type === 'stamps' || b.program.type === 'visits';
     const st = ss();
-    const gw = S.mode === 'firebase' ? walletFnUrl() : '';
+    const wb = walletButtons(token, c, S.mode === 'firebase');
     return `${welcome ? `<div class="note" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}<span><b>${t('join_welcome', { program: esc(programName(b)) })}</b><br><span class="small">${t('w_saved')}</span></span></div>` : ''}
       ${!canOperate(b) ? `<div class="note">${icon('info')}<span>${t('c_paused')}</span></div>` : ''}
       ${renderCard({ business: b, card: c, rewardsReady: readyN(), goal: stampGoal(b.program, live()) })}
-      ${gw ? googleWalletButton(gw, token, c) : ''}
+      ${wb.html}
       ${st && st.ready ? `<button class="btn primary lg block" data-tab="rewards">${icon('gift')}${st.ready === 1 ? t('c_rewards_count_one') : t('c_rewards_count', { n: fmtNum(st.ready) })}</button>` : ''}
       <p class="small muted" style="text-align:center">${t('c_show_staff')}</p>
       ${openCodes().length ? `<section class="panel"><div class="panel-h"><h3>${t('c_open_codes')}</h3></div><div class="panel-b"><ul class="list">${openCodes().map((r) => `<li><span class="grow"><span class="t">${esc(evName(r))}</span><span class="s">${t('c_code_exp', { t: fmtTime(r.expiresAt) })}</span></span><button class="btn sm" data-show="${esc(r.id)}">${esc(r.id)}</button></li>`).join('')}</ul></div></section>` : ''}
@@ -143,7 +159,7 @@ async function cardApp(token) {
         ${nx ? `<div class="progress-line"><i style="width:${Math.min(100, ((c.lifetimePoints - (tier?.min || 0)) / (nx.min - (tier?.min || 0))) * 100)}%"></i></div><span class="small muted">${t('c_to_next', { n: fmtNum(nx.min - c.lifetimePoints), unit: esc(unit()), tier: esc(tierName(nx)) })}</span>` : `<span class="small muted">${t('c_top_tier')}</span>`}
         ${tier?.benefits ? `<div class="note">${icon('star')}<span>${esc(tier.benefits)}</span></div>` : ''}
       </div></section>` : ''}
-      ${gw ? '' : `<section class="panel"><div class="panel-b stack" style="gap:10px">
+      ${wb.any ? '' : `<section class="panel"><div class="panel-b stack" style="gap:10px">
         <div class="row" style="gap:8px"><button class="btn block" disabled>${icon('card')}Apple Wallet</button><button class="btn block" disabled>${icon('card')}Google Wallet</button></div>
         <p class="tiny muted" style="text-align:center">${t('c_wallet_soon')} · ${t('c_save_card')}</p>
       </div></section>`}`;

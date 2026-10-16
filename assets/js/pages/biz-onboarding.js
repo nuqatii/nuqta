@@ -90,7 +90,7 @@ export default function onboarding(ctx, root, onDone) {
     root.className = 'center-load';
     root.innerHTML = `<div class="empty" style="max-width:420px">${icon('info')}<h2 style="color:var(--ink)">${t('err_signups-closed')}</h2>
       <button class="btn" id="out">${icon('out')}${t('nav_signout')}</button></div>`;
-    $('#out').onclick = async () => { await ctx.S.signOut(); location.replace('index.html'); };
+    $('#out').onclick = async () => { await ctx.S.signOut(); location.replace('login.html'); };
     return;
   }
 

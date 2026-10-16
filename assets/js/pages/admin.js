@@ -11,7 +11,7 @@ const CHIP = { trial: 'brand', active: 'ok', grace: 'warn', expired: 'bad', susp
 let filter = 'all';
 
 async function render() {
-  if (!S.auth.current()) return location.replace('index.html?next=admin.html');
+  if (!S.auth.current()) return location.replace('login.html?next=admin.html');
   if (!(await S.isPlatformAdmin())) { root.className = 'center-load'; root.innerHTML = `<div class="empty">${icon('shield')}<p>${t('ad_not_admin')}</p><a class="btn" href="app.html">${t('back')}</a></div>`; return; }
   const [list, settings] = await Promise.all([S.adminListBusinesses(), S.adminSettings()]);
   const now = Date.now();
@@ -75,7 +75,7 @@ async function render() {
   </main>`;
 
   $('#lang').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); render(); };
-  $('#out').onclick = async () => { await S.signOut(); location.replace('index.html'); };
+  $('#out').onclick = async () => { await S.signOut(); location.replace('login.html'); };
   root.querySelectorAll('[data-f]').forEach((x) => (x.onclick = () => { filter = x.dataset.f; render(); }));
   root.querySelectorAll('[data-pay]').forEach((x) => (x.onclick = () => payDialog(rows.find((r) => r.id === x.dataset.pay), settings)));
   root.querySelectorAll('[data-more]').forEach((x) => (x.onclick = () => moreDialog(rows.find((r) => r.id === x.dataset.more))));

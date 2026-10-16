@@ -52,7 +52,7 @@ const ctx = {
 };
 
 async function boot() {
-  if (!ctx.user) return location.replace('index.html?next=app.html');
+  if (!ctx.user) return location.replace('login.html?next=app.html');
   if (await S.isPlatformAdmin()) return location.replace('admin.html');   // admin accounts don't run a business
   ctx.platform = await S.platformSettings().catch(() => null);
   ctx.memberships = await S.myMemberships();
@@ -142,12 +142,12 @@ function renderChrome() {
     <button data-more>${icon('more')}<span>${t('nav_more')}</span></button></nav>`;
 
   root.querySelectorAll('[data-lang]').forEach((b) => (b.onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); renderChrome(); route(); }));
-  root.querySelector('[data-out]').onclick = async () => { await S.signOut(); location.replace('index.html'); };
+  root.querySelector('[data-out]').onclick = async () => { await S.signOut(); location.replace('login.html'); };
   root.querySelectorAll('[data-switch]').forEach((b) => (b.onclick = switchBusiness));
   root.querySelector('[data-more]').onclick = moreMenu;
   root.querySelector('[data-reset]')?.addEventListener('click', async () => {
     if (await confirmBox(t('demo_reset'), lang === 'ar' ? 'ستعود بيانات Joe’s Pizza إلى حالتها الأصلية.' : "Joe's Pizza goes back to its original demo data.")) {
-      await S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('index.html');
+      await S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('login.html');
     }
   });
 }
@@ -169,7 +169,7 @@ function moreMenu() {
     <div class="hr" style="margin:10px 0"></div><a href="#" data-out2>${icon('out')}${t('nav_signout')}</a></nav>`;
   modal({ title: t('nav_more'), body, onMount: (el, close) => {
     el.querySelectorAll('[data-close]').forEach((a) => a.addEventListener('click', () => close()));
-    el.querySelector('[data-out2]').onclick = async (e) => { e.preventDefault(); await S.signOut(); location.replace('index.html'); };
+    el.querySelector('[data-out2]').onclick = async (e) => { e.preventDefault(); await S.signOut(); location.replace('login.html'); };
   } });
 }
 

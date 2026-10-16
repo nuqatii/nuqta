@@ -524,3 +524,48 @@ a.wtile:active { transform: scale(.985); }
 .gw-link:active .gw-btn { transform: scale(.98); }
 .gw p { text-align: center; margin: 0; display: flex; align-items: center; gap: 4px; }
 .gw p svg { width: 14px; height: 14px; }
+
+/* Public home page */
+.home { max-width: 1080px; margin-inline: auto; padding: 16px 16px 48px; }
+.home-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 18px; }
+.home-top .brandmark { padding: 0; text-decoration: none; }
+.home-top nav { display: flex; gap: 8px; }
+.home-hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; padding: 28px 0 40px; }
+.home-hero h1 { font-size: clamp(1.8rem, 4.2vw, 2.8rem); line-height: 1.15; margin: 0 0 14px; letter-spacing: -.01em; }
+.home-lead { font-size: 1.08rem; line-height: 1.8; color: var(--ink-2); margin: 0 0 22px; }
+.home-cta { display: flex; flex-wrap: wrap; gap: 10px; }
+.home-card { max-width: 360px; width: 100%; justify-self: center; transform: rotate(-2deg); }
+[dir="rtl"] .home-card { transform: rotate(2deg); }
+.home-sec { padding: 30px 0; border-top: 1px solid var(--line); }
+.home-sec h2 { font-size: 1.35rem; margin: 0 0 18px; }
+.home-sec p { line-height: 1.8; color: var(--ink-2); max-width: 760px; }
+.home-steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.home-steps li, .home-feats > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 18px; position: relative; }
+.home-steps .n { position: absolute; top: 14px; inset-inline-end: 16px; font-weight: 700; color: var(--faint); }
+.home-steps svg, .home-feats svg { width: 26px; height: 26px; color: var(--brand); }
+.home-steps h3, .home-feats h3 { font-size: 1rem; margin: 10px 0 6px; }
+.home-steps p, .home-feats p { margin: 0; font-size: .93rem; line-height: 1.7; color: var(--muted); }
+.home-feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.home-demo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 12px; }
+.home-demo-card { display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: var(--r-md); background: var(--brand-tint); color: var(--ink); text-decoration: none; border: 1px solid transparent; }
+.home-demo-card:hover { border-color: var(--brand); }
+.home-demo-card svg { width: 24px; height: 24px; color: var(--brand); }
+.home-demo-card span { font-size: .9rem; color: var(--ink-2); line-height: 1.7; }
+.home-demo-card code { background: var(--surface); padding: 1px 6px; border-radius: 6px; }
+.home-foot { border-top: 1px solid var(--line); padding-top: 24px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.home-foot .btn svg { width: 18px; height: 18px; }
+.home-links { display: flex; flex-wrap: wrap; gap: 18px; font-size: .92rem; color: var(--muted); }
+.home-links a { color: var(--ink-2); }
+@media (max-width: 860px) {
+  .home-hero { grid-template-columns: 1fr; gap: 28px; padding-top: 12px; }
+  .home-card { max-width: 320px; }
+  .home-steps { grid-template-columns: repeat(2, 1fr); }
+  .home-feats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+  .home-steps, .home-feats, .home-demo-grid { grid-template-columns: 1fr; }
+  .home-cta .btn { flex: 1 1 100%; justify-content: center; }
+}
+.home-foot .btn { white-space: normal; flex-wrap: wrap; max-width: 100%; height: auto; min-height: 44px; text-align: start; }
+.home, .home * { min-width: 0; }
+@media (max-width: 520px) { .home-card, [dir="rtl"] .home-card { transform: none; } }

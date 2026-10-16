@@ -6,7 +6,7 @@ import { stampsPng } from './stamps.js';
 const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 
-export function createHandler({ firestore, google, config }) {
+export function createHandler({ firestore, google, config, apple = null }) {
   const siteUrl = config.SITE_URL.endsWith('/') ? config.SITE_URL : config.SITE_URL + '/';
   const issuerId = () => String(config.GOOGLE_WALLET?.issuerId || '');
   const fnBase = () => `https://${config.GOOGLE_WALLET.region}-${config.FIREBASE.projectId}.cloudfunctions.net/gwallet`;
@@ -53,13 +53,18 @@ export function createHandler({ firestore, google, config }) {
     const token = String(req.query.t || '');
     const bid = String(req.query.b || '');
     const iss = issuerId();
+    const jobs = [];
     if (token) {
       const d = await loadCard(token);
-      if (d && d.card.walletGoogle) await google.updateObjectIfExists(buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) }));
+      if (d && iss && d.card.walletGoogle) jobs.push(google.updateObjectIfExists(buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) })));
+      if (d && apple?.enabled() && d.card.walletApple) jobs.push(apple.touch(token, d.card));
     } else if (ID_RE.test(bid)) {
       const business = await get(`businesses/${bid}`);
-      if (business && (await google.getClass(classIdFor(iss, bid)))) await google.upsertClass(buildClass({ issuerId: iss, bid, business, logoUrl: logoUrl(bid, business) }));
+      if (business && iss) jobs.push(google.getClass(classIdFor(iss, bid)).then((c) => c && google.upsertClass(buildClass({ issuerId: iss, bid, business, logoUrl: logoUrl(bid, business) }))));
+      if (business && apple?.enabled()) jobs.push(apple.touchBusiness(bid));
     }
+    const out = await Promise.allSettled(jobs);
+    for (const r of out) if (r.status === 'rejected') console.error('sync', r.reason);
     res.status(204).send('');
   }
 
@@ -85,11 +90,17 @@ export function createHandler({ firestore, google, config }) {
   return async function handler(req, res) {
     res.set('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') return res.status(204).send('');
+    const path = String(req.path || '/').replace(/^\/gwallet(?=\/|$)/, '');
+    if (path.startsWith('/apple/') || path === '/apple') {
+      if (!apple) return res.status(503).send('Apple Wallet is not set up yet.');
+      try { return await apple.route(req, res, path.slice('/apple'.length)); }
+      catch (e) { console.error('apple', e); return res.status(500).send(''); }
+    }
+    const route = path.replace(/\/+$/, '').split('/').pop();
+    if (route === 'sync') { try { return await sync(req, res); } catch (e) { console.error('sync', e); return res.status(204).send(''); } }
     if (!issuerId()) return page(res, 503, 'Google Wallet is not set up yet.', 'محفظة Google غير مفعّلة بعد.');
-    const route = String(req.path || '/').replace(/\/+$/, '').split('/').pop();
     try {
       if (route === 'save') return await save(req, res);
-      if (route === 'sync') return await sync(req, res);
       if (route === 'logo') return await logo(req, res);
       if (route === 'stamps' || route === 'stamps.png') return await stamps(req, res);
       return page(res, 404, 'Not found.', 'غير موجود.');

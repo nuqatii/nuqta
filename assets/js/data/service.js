@@ -2,7 +2,8 @@
 // It runs unchanged on the demo store and on Firestore; firestore.rules enforce the
 // same tenant + role boundaries server-side.
 import * as L from '../core/loyalty.js';
-import { walletFnUrl } from '../config.js';
+import { walletFnUrl, appleFnUrl } from '../config.js';
+const walletBase = () => (walletFnUrl() || appleFnUrl().replace(/\/apple$/, ''));
 
 const now = () => Date.now();
 const fail = (code, extra) => { const e = new Error(code); e.code = code; Object.assign(e, extra); throw e; };
@@ -34,7 +35,7 @@ export function createService({ db, auth, mode }) {
   const user = () => auth.current();
   // Tells the Google Wallet function to refresh a saved pass (fire and forget; never blocks the cashier).
   function walletPing(query) {
-    const base = mode === 'firebase' ? walletFnUrl() : '';
+    const base = mode === 'firebase' && (walletFnUrl() || appleFnUrl()) ? walletBase() : '';
     if (!base) return;
     const url = `${base}/sync?${query}`;
     try {
@@ -42,7 +43,7 @@ export function createService({ db, auth, mode }) {
       globalThis.fetch?.(url, { method: 'POST', mode: 'no-cors', keepalive: true }).catch(() => {});
     } catch { /* ignore */ }
   }
-  const pingCard = (c) => { if (c?.walletGoogle && c.cardToken) walletPing('t=' + encodeURIComponent(c.cardToken)); };
+  const pingCard = (c) => { if ((c?.walletGoogle || c?.walletApple) && c.cardToken) walletPing('t=' + encodeURIComponent(c.cardToken)); };
 
   async function roleIn(bid) {
     const u = user(); if (!u) return null;

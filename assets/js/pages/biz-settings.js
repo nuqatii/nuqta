@@ -68,5 +68,5 @@ async function settingsPage(ctx, el) {
     try { await ctx.S.updateBusiness(ctx.bid, { name: f.name.value.trim(), type: f.type.value, currency: f.currency.value, lang: f.lang.value }); toast(t('saved')); await ctx.reloadBiz(); }
     catch (err) { showError(err); }
   };
-  $('#reset', el)?.addEventListener('click', async () => { await ctx.S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('index.html'); });
+  $('#reset', el)?.addEventListener('click', async () => { await ctx.S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('login.html'); });
 }

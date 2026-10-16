@@ -10,6 +10,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "firebase-admin": "^13.5.0",
     "firebase-functions": "^6.4.0",
-    "google-auth-library": "^9.15.1"
+    "google-auth-library": "^9.15.1",
+    "passkit-generator": "^3.7.0"
   }
 }

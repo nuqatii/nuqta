@@ -31,6 +31,13 @@ export const CONFIG = {
     officialButton: true,       // Google's official button images in assets/img (gwallet-ar.svg, gwallet-en.svg)
   },
 
+  // Apple Wallet. Leave passTypeId empty to hide the "Add to Apple Wallet" button (APPLE_WALLET_SETUP.md).
+  APPLE_WALLET: {
+    passTypeId: '',             // e.g. 'pass.app.nuqta.loyalty' (Apple Developer → Identifiers → Pass Type IDs)
+    teamId: '',                 // 10 characters, Apple Developer → Membership
+    officialButton: false,      // true once Apple's badges are in assets/img (applewallet-ar.svg, applewallet-en.svg)
+  },
+
   // Shown in the Privacy Policy and Terms of Service.
   LEGAL: {
     name: { en: 'Nuqta', ar: 'نقطة' },       // put the registered business name here once you have it
@@ -59,6 +66,13 @@ export function walletFnUrl() {
   const g = CONFIG.GOOGLE_WALLET;
   if (!g?.issuerId || !CONFIG.FIREBASE.projectId) return '';
   return `https://${g.region}-${CONFIG.FIREBASE.projectId}.cloudfunctions.net/gwallet`;
+}
+
+// Address of the Apple Wallet download, or '' when Apple Wallet is off.
+export function appleFnUrl() {
+  const a = CONFIG.APPLE_WALLET;
+  if (!a?.passTypeId || !a?.teamId || !CONFIG.FIREBASE.projectId) return '';
+  return `https://${CONFIG.GOOGLE_WALLET?.region || 'europe-west1'}-${CONFIG.FIREBASE.projectId}.cloudfunctions.net/gwallet/apple`;
 }
 
 // Base URL of the deployed site (works on GitHub Pages sub-paths).
