@@ -28,7 +28,7 @@ export function createHandler({ firestore, google, config, apple = null }) {
 
   function page(res, status, en, ar) {
     res.status(status).set('Content-Type', 'text/html; charset=utf-8').send(
-      `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nuqta</title>
+      `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>nuqatii</title>
 <body style="font-family:system-ui,sans-serif;max-width:420px;margin:15vh auto;padding:0 16px;text-align:center;line-height:1.6">
 <p dir="rtl">${ar}</p><p>${en}</p><p><a href="${siteUrl}rewards.html">${siteUrl}rewards.html</a></p></body>`);
   }

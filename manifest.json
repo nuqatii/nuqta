@@ -1,11 +1,11 @@
 {
-  "name": "My cards · بطاقاتي",
+  "name": "My cards · بطاقاتي — nuqatii",
   "short_name": "My cards",
   "start_url": "./rewards.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#F3F5F7",
-  "theme_color": "#0F6E5C",
+  "theme_color": "#1B2559",
   "icons": [
     {
       "src": "assets/img/icon-192.png",

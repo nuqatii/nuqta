@@ -1,4 +1,4 @@
-// Nuqta server functions. Deployed automatically by .github/workflows/firebase-deploy.yml.
+// nuqatii server functions. Deployed automatically by .github/workflows/firebase-deploy.yml.
 //
 //   GET  /gwallet/save?t=<cardToken>   → creates/updates the pass and opens "Save to Google Wallet"
 //   POST /gwallet/sync?t=<cardToken>   → refreshes a saved pass after points change (called by the site)

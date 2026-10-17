@@ -1,26 +1,26 @@
 {
-  "name": "Nuqta for business",
-  "short_name": "Nuqta",
+  "name": "nuqatii Business · نقاطي للأعمال",
+  "short_name": "nuqatii Business",
   "start_url": "./app.html#/checkout",
   "scope": "./",
   "display": "standalone",
   "background_color": "#F3F5F7",
-  "theme_color": "#0F6E5C",
+  "theme_color": "#1B2559",
   "icons": [
     {
-      "src": "assets/img/icon-192.png",
+      "src": "assets/img/biz-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/img/icon-512.png",
+      "src": "assets/img/biz-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/img/icon-maskable-512.png",
+      "src": "assets/img/biz-icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -28,5 +28,6 @@
   ],
   "id": "./app.html",
   "lang": "ar",
-  "dir": "auto"
+  "dir": "auto",
+  "description": "Checkout, customers and rewards for businesses using nuqatii."
 }
