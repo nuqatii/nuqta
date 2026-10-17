@@ -2,7 +2,7 @@
   "name": "My cards · بطاقاتي — nuqatii",
   "short_name": "My cards",
   "start_url": "./rewards.html",
-  "scope": "./",
+  "scope": "./rewards",
   "display": "standalone",
   "background_color": "#F3F5F7",
   "theme_color": "#1B2559",
