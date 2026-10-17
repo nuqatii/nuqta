@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0F6E5C"/><circle cx="32" cy="32" r="11" fill="#E8A33D"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><rect width="100" height="100" rx="22.0" fill="#FFFFFF"/><defs>
+<linearGradient id="gd" gradientUnits="userSpaceOnUse" x1="23" y1="22" x2="62" y2="61"><stop offset="0" stop-color="#2E2470"/><stop offset=".55" stop-color="#D8436F"/><stop offset="1" stop-color="#F7931E"/></linearGradient>
+<linearGradient id="gl" gradientUnits="userSpaceOnUse" x1="0" y1="13" x2="0" y2="71"><stop offset="0" stop-color="#2E2470"/><stop offset="1" stop-color="#1B2559"/></linearGradient>
+<linearGradient id="go" gradientUnits="userSpaceOnUse" x1="0" y1="13" x2="0" y2="71"><stop offset="0" stop-color="#FBA21B"/><stop offset="1" stop-color="#F26B21"/></linearGradient>
+<radialGradient id="gdot" gradientUnits="userSpaceOnUse" cx="77" cy="70" r="14"><stop offset="0" stop-color="#FDB022"/><stop offset="1" stop-color="#F57C1F"/></radialGradient>
+</defs><g transform="translate(9.44 11.78) scale(0.78)"><g stroke-linecap="round" fill="none" stroke-width="18"><path d="M23 22 V62" stroke="url(#gl)"/><path d="M62 22 V61" stroke="url(#go)"/><path d="M23 22 L62 61" stroke="url(#gd)"/></g><circle cx="81" cy="76" r="9.5" fill="url(#gdot)"/></g></svg>

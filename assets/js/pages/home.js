@@ -1,4 +1,4 @@
-// Public home page: what Nuqta is, how it works, a live card preview, demo links, contact and legal links.
+// Public home page: what nuqatii is, how it works, a live card preview, demo links, contact and legal links.
 import { CONFIG } from '../config.js';
 import { setLang, lang } from '../core/i18n.js';
 import { renderCard } from '../ui/card.js';
@@ -11,7 +11,8 @@ const DEMO_CARD = 'demoMayaCard7Qp2xKw9Lr4Tz';
 const H = {
   en: {
     title: 'Digital loyalty cards for local businesses',
-    lead: 'Nuqta gives restaurants, cafés, salons and shops their own branded loyalty card. Customers join by scanning a QR code: no app and no password. They collect points or stamps on their phone and can keep the card in Google Wallet or Apple Wallet.',
+    tag: 'Every visit counts.',
+    lead: 'nuqatii gives restaurants, cafés, salons and shops their own branded loyalty card. Customers join by scanning a QR code: no app and no password. They collect points or stamps on their phone and can keep the card in Google Wallet or Apple Wallet.',
     start: 'Create your loyalty program', signin: 'Sign in', demoCard: 'See a demo card', demoBiz: 'Try the business dashboard',
     howTitle: 'How it works',
     how: [
@@ -39,7 +40,8 @@ const H = {
   },
   ar: {
     title: 'بطاقات ولاء رقمية للأنشطة التجارية المحلية',
-    lead: 'تمنح نقطة المطاعم والمقاهي والصالونات والمتاجر بطاقة ولاء خاصة بعلامتها. ينضم الزبون بمسح رمز QR، بلا تطبيق ولا كلمة مرور، ويجمع النقاط أو الأختام على هاتفه ويمكنه حفظ البطاقة في محفظة Google أو Apple Wallet.',
+    tag: 'كل زيارة تُحسب.',
+    lead: 'تمنح نقاطي المطاعم والمقاهي والصالونات والمتاجر بطاقة ولاء خاصة بعلامتها. ينضم الزبون بمسح رمز QR، بلا تطبيق ولا كلمة مرور، ويجمع النقاط أو الأختام على هاتفه ويمكنه حفظ البطاقة في محفظة Google أو Apple Wallet.',
     start: 'أنشئ برنامج الولاء الخاص بك', signin: 'تسجيل الدخول', demoCard: 'شاهد بطاقة تجريبية', demoBiz: 'جرّب لوحة النشاط التجاري',
     howTitle: 'كيف تعمل',
     how: [
@@ -81,14 +83,15 @@ function render() {
   root.className = 'home';
   root.innerHTML = `
   <header class="home-top">
-    <a class="brandmark" href="index.html"><span class="dot"></span>${esc(name)}</a>
-    <nav><button class="btn ghost sm" id="lang">${ar ? 'English' : 'العربية'}</button><a class="btn sm" href="login.html">${T.signin}</a></nav>
+    <a class="home-logo" href="index.html"><img src="assets/brand/logo-horizontal-${ar ? 'ar' : 'en'}.svg" alt="${esc(name)}" height="34"></a>
+    <nav><button class="btn ghost sm" id="lang">${ar ? 'English' : 'العربية'}</button><a class="btn sm" href="login.html?mode=firebase">${T.signin}</a></nav>
   </header>
   <section class="home-hero">
     <div class="home-copy">
+      <p class="home-tag">${T.tag}</p>
       <h1>${T.title}</h1>
       <p class="home-lead">${T.lead}</p>
-      <div class="home-cta"><a class="btn primary lg" href="login.html?view=signup">${T.start}</a><a class="btn lg" href="rewards.html?mode=demo&c=${DEMO_CARD}">${T.demoCard}</a></div>
+      <div class="home-cta"><a class="btn primary lg" href="login.html?mode=firebase&view=signup">${T.start}</a><a class="btn lg" href="rewards.html?mode=demo&c=${DEMO_CARD}">${T.demoCard}</a></div>
     </div>
     <div class="home-card">${previewCard(T)}</div>
   </section>

@@ -7,6 +7,17 @@ import { esc, icon, $, modal, showError, confirmBox } from '../ui/ui.js';
 const S = await getService();
 const root = document.getElementById('root');
 
+// "Install the app": nuqatii Business installs as its own app, separate from customers' "My cards".
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+let installPrompt = null;
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; });
+async function installApp() {
+  if (installPrompt) { installPrompt.prompt(); installPrompt = null; return; }
+  modal({ title: t('bi_install'), body: `<p>${isIOS ? t('bi_ios') : t('bi_other')}</p>`, actions: [{ label: t('close'), value: null }] });
+}
+
 const NAV = [
   { group: 'nav_group_daily', items: [
     { id: 'dashboard', icon: 'home' }, { id: 'checkout', icon: 'scan', cls: 'checkout-link' },
@@ -127,6 +138,7 @@ function renderChrome() {
         ${groups.map((g) => `<div class="nav-group">${t(g.group)}</div>${g.items.map((i) => `<a href="#/${i.id}" class="${i.cls || ''}" ${curNav === i.id ? 'aria-current="page"' : ''}>${icon(i.icon)}${t('nav_' + i.id)}</a>`).join('')}`).join('')}
       </nav>
       <div class="side-foot">
+        ${standalone ? '' : `<button class="btn ghost sm" data-install style="justify-content:flex-start">${icon('dl')}${t('bi_install')}</button>`}
         <button class="btn ghost sm" data-lang style="justify-content:flex-start">${icon('globe')}${t('switch_lang')}</button>
         <div class="me"><span class="av">${esc((ctx.user.name || ctx.user.email)[0].toUpperCase())}</span><span class="grow small" style="min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(ctx.user.name || ctx.user.email)}</span>
           <button class="btn ghost sm icon" data-out title="${t('nav_signout')}" aria-label="${t('nav_signout')}">${icon('out')}</button></div>
@@ -145,6 +157,7 @@ function renderChrome() {
   root.querySelector('[data-out]').onclick = async () => { await S.signOut(); location.replace('login.html'); };
   root.querySelectorAll('[data-switch]').forEach((b) => (b.onclick = switchBusiness));
   root.querySelector('[data-more]').onclick = moreMenu;
+  root.querySelector('[data-install]')?.addEventListener('click', installApp);
   root.querySelector('[data-reset]')?.addEventListener('click', async () => {
     if (await confirmBox(t('demo_reset'), lang === 'ar' ? 'ستعود بيانات Joe’s Pizza إلى حالتها الأصلية.' : "Joe's Pizza goes back to its original demo data.")) {
       await S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('login.html');
@@ -166,9 +179,10 @@ async function switchBusiness() {
 
 function moreMenu() {
   const body = `<nav class="nav">${navItems().map((g) => `<div class="nav-group">${t(g.group)}</div>${g.items.map((i) => `<a href="#/${i.id}" data-close>${icon(i.icon)}${t('nav_' + i.id)}</a>`).join('')}`).join('')}
-    <div class="hr" style="margin:10px 0"></div><a href="#" data-out2>${icon('out')}${t('nav_signout')}</a></nav>`;
+    <div class="hr" style="margin:10px 0"></div>${standalone ? '' : `<a href="#" data-install2>${icon('dl')}${t('bi_install')}</a>`}<a href="#" data-out2>${icon('out')}${t('nav_signout')}</a></nav>`;
   modal({ title: t('nav_more'), body, onMount: (el, close) => {
     el.querySelectorAll('[data-close]').forEach((a) => a.addEventListener('click', () => close()));
+    el.querySelector('[data-install2]')?.addEventListener('click', (e) => { e.preventDefault(); close(); installApp(); });
     el.querySelector('[data-out2]').onclick = async (e) => { e.preventDefault(); await S.signOut(); location.replace('login.html'); };
   } });
 }

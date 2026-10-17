@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 export const CONFIG = {
   // Product name (placeholder — change freely)
-  APP_NAME: { en: 'Nuqta', ar: 'نقطة' },
+  APP_NAME: { en: 'nuqatii', ar: 'نقاطي' },
 
   // 'demo'     → everything runs in this browser (localStorage), seeded with Joe's Pizza.
   // 'firebase' → real multi-tenant backend (fill FIREBASE below).
@@ -33,18 +33,18 @@ export const CONFIG = {
 
   // Apple Wallet. Leave passTypeId empty to hide the "Add to Apple Wallet" button (APPLE_WALLET_SETUP.md).
   APPLE_WALLET: {
-    passTypeId: '',             // e.g. 'pass.app.nuqta.loyalty' (Apple Developer → Identifiers → Pass Type IDs)
+    passTypeId: '',             // e.g. 'pass.io.github.nuqatii.cards' (Apple Developer → Identifiers → Pass Type IDs)
     teamId: '',                 // 10 characters, Apple Developer → Membership
     officialButton: false,      // true once Apple's badges are in assets/img (applewallet-ar.svg, applewallet-en.svg)
   },
 
   // Shown in the Privacy Policy and Terms of Service.
   LEGAL: {
-    name: { en: 'Nuqta', ar: 'نقطة' },       // put the registered business name here once you have it
+    name: { en: 'nuqatii', ar: 'نقاطي' },  // the service name shown in the Privacy Policy and Terms
     country: { en: 'Syria', ar: 'سوريا' },
     whatsapp: '+963953667748',
     email: '',                                  // optional; leave empty to hide
-    updated: '2026-10-15',                      // change when you edit the texts
+    updated: '2026-10-18',                      // change when you edit the texts
     retentionDays: 90,
   },
 

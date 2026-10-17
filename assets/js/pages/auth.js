@@ -55,6 +55,7 @@ function render() {
     </form>
     ${S.mode === 'demo' ? `
     <div class="stack" style="gap:10px">
+      <div class="note">${icon('info')}<span>${t('demo_login_note')} <a href="login.html?mode=firebase">${t('demo_login_exit')}</a></span></div>
       <div class="spread"><h3>${t('demo_accounts')}</h3><span class="tiny muted ltr">${t('demo_pw')}</span></div>
       <div class="demo-list">
         ${['owner', 'staff', 'marketing', 'admin'].map((k) => `<button data-demo="${k}">${icon(k === 'admin' ? 'shield' : k === 'staff' ? 'scan' : k === 'marketing' ? 'send' : 'building')}<span class="grow"><b>${k === 'admin' ? t('admin_console') : t('role_' + k) + " · Joe's Pizza"}</b><small class="ltr">${DEMO_ACCOUNTS[k].email}</small></span></button>`).join('')}
