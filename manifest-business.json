@@ -2,7 +2,7 @@
   "name": "nuqatii Business · نقاطي للأعمال",
   "short_name": "nuqatii Business",
   "start_url": "./app.html#/checkout",
-  "scope": "./",
+  "scope": "./app",
   "display": "standalone",
   "background_color": "#F3F5F7",
   "theme_color": "#1B2559",
