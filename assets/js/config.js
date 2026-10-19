@@ -21,7 +21,7 @@ export const CONFIG = {
   FIREBASE_SDK_VERSION: '12.19.0',
 
   // Public address of the site (used inside wallet passes to link back to the card).
-  SITE_URL: 'https://nuqatii.github.io/nuqta/',
+  SITE_URL: 'https://nuqatii.com/',
 
   // Google Wallet. Leave issuerId empty to hide the "Add to Google Wallet" button.
   // issuerId comes from pay.google.com/business/console (see GOOGLE_WALLET_SETUP.md).
