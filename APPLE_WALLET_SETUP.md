@@ -16,8 +16,8 @@ Go to https://developer.apple.com/account and open **Membership details**. Copy 
 ## Part 3: Create a Pass Type ID
 
 1. Go to **Certificates, Identifiers & Profiles**, then **Identifiers**, then **+**, then **Pass Type IDs**, then **Continue**.
-2. Description: `Nuqta loyalty cards`.
-3. Identifier: `pass.io.github.nuqatii.cards`. If Apple says it is taken, add a word, for example `pass.io.github.nuqatii.loyalty`.
+2. Description: `nuqatii loyalty cards`.
+3. Identifier: `pass.com.nuqatii.cards` (this is the one in use).
 4. Click **Register**.
 
 **Send Claude the Team ID and the Pass Type ID.** Claude replies with a file named `nuqta.certSigningRequest`.
