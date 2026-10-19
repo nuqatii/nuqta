@@ -70,7 +70,7 @@ export async function seedDemo(db, auth) {
       email: R() < 0.4 ? `member${i}@example.com` : '',
       birthday: R() < 0.55 ? `${between(1970, 2006)}-${String(between(1, 12)).padStart(2, '0')}-${String(between(1, 28)).padStart(2, '0')}` : '',
       gender: '', notes: isMaya ? 'Prefers thin crust. Usually orders for the office on Thursdays.' : '',
-      marketingConsent: isMaya || R() < 0.7, preferredChannel: R() < 0.8 ? 'whatsapp' : 'sms',
+      marketingConsent: isMaya || R() < 0.7, preferredChannel: R() < 0.8 ? 'whatsapp' : 'sms', walletGoogle: i % 5 < 2,
       memberNumber: L.memberNumber(i + 1), cardToken: isMaya ? DEMO_CARD : L.cardToken(),
       scanId: isMaya ? 'NQMAYA2026' : 'NQ' + L.randomString(10, 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'),
       businessId: bid, joinedAt, lastVisitAt: null, visits: 0, spend: 0, points: program.welcomeBonus, lifetimePoints: program.welcomeBonus,

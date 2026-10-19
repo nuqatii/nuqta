@@ -6,18 +6,47 @@ export default async function team(ctx, el, { page }) {
   return page === 'locations' ? locations(ctx, el) : staff(ctx, el);
 }
 
+// Reads coordinates from a pasted Google Maps link or "lat, lng" text.
+export function parseCoords(text) {
+  const s = decodeURIComponent(String(text || '')).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  const pats = [/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, /@(-?\d+\.\d+),(-?\d+\.\d+)/, /[?&](?:q|query|ll|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/, /^\s*(-?\d+\.\d+)\s*[,،]\s*(-?\d+\.\d+)\s*$/];
+  for (const re of pats) { const m = s.match(re); if (m) { const lat = +m[1], lng = +m[2]; if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng }; } }
+  return null;
+}
+
 async function locations(ctx, el) {
   const list = await ctx.S.listLocations(ctx.bid);
+  const has = (l) => Number.isFinite(l.lat) && Number.isFinite(l.lng) && l.lat !== null;
   el.innerHTML = `<div class="page-head"><div><h1>${t('lc_title')}</h1><p>${t('lc_hint')}</p></div><div class="actions"><button class="btn primary" id="add">${icon('plus')}${t('lc_add')}</button></div></div>
+    <div class="note" style="margin-bottom:14px">${icon('pin')}<span>${t('lc_geo_note')}</span></div>
     <section class="panel"><div class="panel-b"><ul class="list">${list.map((l) => `<li><span class="av sq" style="background:var(--brand-tint);color:var(--brand)">${icon('pin')}</span>
-      <span class="grow"><span class="t">${esc(l.name)}</span><span class="s">${esc(l.address || '—')}</span></span><button class="btn sm icon ghost" data-edit="${l.id}" aria-label="${t('edit')}">${icon('edit')}</button></li>`).join('')}</ul></div></section>`;
-  const dlg = (l = {}) => modal({ title: l.id ? t('edit') : t('lc_add'),
+      <span class="grow"><span class="t">${esc(l.name)}</span><span class="s">${esc(l.address || '—')} · ${has(l) ? `<span style="color:var(--ok)">${t('lc_on_passes')}</span>` : `<span class="muted">${t('lc_no_pin')}</span>`}</span></span><button class="btn sm icon ghost" data-edit="${l.id}" aria-label="${t('edit')}">${icon('edit')}</button></li>`).join('')}</ul></div></section>`;
+  const dlg = (l = {}) => modal({ title: l.id ? t('edit') : t('lc_add'), wide: true,
     body: `<form class="form" id="lf"><label class="field"><span>${t('lc_name')}</span><input class="input" name="name" value="${esc(l.name || '')}" autofocus required></label>
-      <label class="field"><span>${t('lc_address')}</span><input class="input" name="address" value="${esc(l.address || '')}"></label></form>`,
+      <label class="field"><span>${t('lc_address')}</span><input class="input" name="address" value="${esc(l.address || '')}"></label>
+      <label class="field"><span>${t('lc_pin')}</span><input class="input ltr" name="pin" placeholder="https://maps.google.com/…  ·  33.5138, 36.2765" value="${has(l) ? `${l.lat}, ${l.lng}` : ''}"><small id="pinmsg">${t('lc_pin_hint')}</small></label>
+      <div class="row wrap"><button type="button" class="btn sm" id="here">${icon('pin')}${t('lc_here')}</button>${has(l) ? `<a class="btn sm ghost" target="_blank" rel="noopener" href="https://maps.google.com/?q=${l.lat},${l.lng}">${t('lc_view_map')}</a>` : ''}</div>
+      <label class="field"><span>${t('lc_nearby')}</span><input class="input" name="nearbyText" maxlength="120" value="${esc(l.nearbyText || '')}" placeholder="${esc(t('lc_nearby_ph'))}"><small>${t('lc_nearby_hint')}</small></label></form>`,
+    onMount: (m) => {
+      const f = $('#lf', m); const msg = $('#pinmsg', m);
+      f.pin.oninput = () => { const c = parseCoords(f.pin.value); msg.textContent = !f.pin.value.trim() ? t('lc_pin_hint') : c ? `✓ ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}` : t('lc_pin_bad'); };
+      $('#here', m).onclick = () => {
+        if (!navigator.geolocation) return toast(t('lc_pin_bad'), 'bad');
+        msg.textContent = '…';
+        navigator.geolocation.getCurrentPosition((p) => { f.pin.value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`; f.pin.oninput(); },
+          () => { msg.textContent = t('lc_here_denied'); }, { enableHighAccuracy: true, timeout: 15000 });
+      };
+    },
     actions: [
       ...(l.id && l.id !== 'main' ? [{ label: t('delete'), kind: 'danger ghost', onClick: async () => { if (!(await confirmBox(t('delete'), l.name, t('delete'), 'danger'))) return false; await ctx.S.deleteLocation(ctx.bid, l.id); return true; } }] : []),
       { label: t('cancel'), value: false },
-      { label: t('save'), kind: 'primary', onClick: async (m) => { const f = $('#lf', m); if (!f.name.value.trim()) return false; await ctx.S.saveLocation(ctx.bid, { ...l, name: f.name.value, address: f.address.value }); toast(t('saved')); return true; } },
+      { label: t('save'), kind: 'primary', onClick: async (m) => {
+        const f = $('#lf', m); if (!f.name.value.trim()) return false;
+        const c = f.pin.value.trim() ? parseCoords(f.pin.value) : null;
+        if (f.pin.value.trim() && !c) { toast(t('lc_pin_bad'), 'bad'); return false; }
+        await ctx.S.saveLocation(ctx.bid, { ...l, name: f.name.value, address: f.address.value, lat: c?.lat ?? null, lng: c?.lng ?? null, nearbyText: f.nearbyText.value });
+        toast(t('saved')); return true;
+      } },
     ] }).then((ok) => ok && locations(ctx, el));
   $('#add', el).onclick = () => dlg();
   el.querySelectorAll('[data-edit]').forEach((x) => (x.onclick = () => dlg(list.find((l) => l.id === x.dataset.edit))));

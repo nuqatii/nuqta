@@ -99,5 +99,6 @@ export function createFirebaseAuth({ app, authMod: a }) {
     async signIn(email, password) { return map((await a.signInWithEmailAndPassword(auth, email, password)).user); },
     signOut: () => a.signOut(auth),
     resetPassword: (email) => a.sendPasswordResetEmail(auth, email),
+    idToken: () => auth.currentUser?.getIdToken() || null,
   };
 }

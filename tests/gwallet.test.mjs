@@ -108,6 +108,7 @@ function fakeRes() {
   r.set = (k, v) => { r.headers[k] = v; return r; };
   r.status = (s) => { r.statusCode = s; return r; };
   r.send = (b) => { r.body = b; return r; };
+  r.json = (b) => { r.body = b; return r; };
   r.redirect = (s, u) => { r.statusCode = s; r.location = u; return r; };
   return r;
 }
@@ -162,4 +163,42 @@ test('sync never creates passes; bad tokens and deleted cards are refused; logo 
   assert.equal(none.location, 'https://nuqatii.github.io/nuqta/assets/img/icon-512.png');
   const off = createHandler({ firestore: fakeFirestore(docs), google: g, config: { ...CFG, GOOGLE_WALLET: { issuerId: '', region: 'x' } } });
   assert.equal((await call(off, '/gwallet/save', { t: TOKEN })).statusCode, 503);
+});
+
+test('class carries up to 10 shop locations for nearby notifications', async () => {
+  const { merchantLocations } = await import('../functions/pass.js');
+  const locs = [{ lat: 33.5138, lng: 36.2765 }, { lat: null, lng: null }, { lat: 0, lng: 0 }, ...Array.from({ length: 12 }, (_, i) => ({ lat: 33 + i / 100, lng: 36 }))];
+  const m = merchantLocations(locs);
+  assert.equal(m.length, 10);
+  assert.deepEqual(m[0], { latitude: 33.5138, longitude: 36.2765 });
+  const c = buildClass({ issuerId: ISS, bid: 'b1', business: BIZ, logoUrl: 'u', locations: [{ lat: 33.5, lng: 36.3 }] });
+  assert.deepEqual(c.merchantLocations, [{ latitude: 33.5, longitude: 36.3 }]);
+});
+
+test('campaign messages: only signed-in marketers, only wallet holders, quota falls back to silent', async () => {
+  const L = await import('../functions/shared/loyalty.js');
+  const docs = {
+    'businesses/urban01': { ...BIZ, status: 'active', trialEndsAt: Date.now() + 9e9 },
+    'businesses/urban01/members/u_owner': { role: 'owner' }, 'businesses/urban01/members/u_staff': { role: 'staff' },
+    'businesses/urban01/customers/c1': { walletGoogle: true, cardToken: TOKEN },
+    'businesses/urban01/customers/c2': { walletGoogle: false, cardToken: 'otherTokenAAAAAAAAAAAAAA' },
+    'businesses/urban01/customers/c3': { walletGoogle: true, cardToken: 'thirdTokenAAAAAAAAAAAAAA' },
+    [`cards/${TOKEN}`]: CARD, 'cards/thirdTokenAAAAAAAAAAAAAA': { ...CARD, customerId: 'c3' },
+    'businesses/urban01/campaigns/camp1': { name: 'x' },
+  };
+  const sent = [];
+  const g = { async addMessage(id, msg, notify) { sent.push([id, msg.header, msg.body]); return id.endsWith('c3') ? 'silent' : 'sent'; } };
+  const h = createHandler({ firestore: fakeFirestore(docs), google: g, config: CFG, L, verifyToken: async (t) => ({ uid: t }) });
+  const post = async (auth, body) => { const res = fakeRes(); await h({ method: 'POST', path: '/gwallet/message', query: {}, body, headers: auth ? { authorization: 'Bearer ' + auth } : {} }, res); return res; };
+  const items = [{ customerId: 'c1', header: 'Hi', body: 'Double stamps' }, { customerId: 'c2', header: 'Hi', body: 'x' }, { customerId: 'c3', header: 'Hi', body: 'y' }];
+  assert.equal((await post(null, { bid: 'urban01', items })).statusCode, 401);
+  assert.equal((await post('u_staff', { bid: 'urban01', items })).statusCode, 403);
+  assert.equal((await post('u_stranger', { bid: 'urban01', items })).statusCode, 403);
+  const ok = await post('u_owner', { bid: 'urban01', campaignId: 'camp1', items });
+  assert.equal(ok.statusCode, 200);
+  assert.deepEqual(ok.body, { sent: 1, silent: 1, notInWallet: 1, failed: 0 });
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0][2], 'Double stamps');
+  assert.equal(docs['businesses/urban01/campaigns/camp1'].status, 'sent');
+  assert.equal(docs['businesses/urban01/campaigns/camp1'].walletSent, 1);
 });

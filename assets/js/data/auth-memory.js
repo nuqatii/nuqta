@@ -22,6 +22,7 @@ export function createMemoryAuth() {
     kind: 'memory',
     current,
     ready: async () => current(),
+    idToken: async () => null,
     onChange(cb) { listeners.add(cb); cb(current()); return () => listeners.delete(cb); },
     async signUp(email, password, name) {
       email = String(email).trim().toLowerCase();

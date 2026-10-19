@@ -6,6 +6,8 @@ export const BUSINESS_TYPES = ['restaurant', 'cafe', 'retail', 'salon', 'gym', '
 export const PROGRAM_TYPES = ['points', 'visits', 'stamps', 'spend'];
 export const ROLES = ['owner', 'manager', 'staff', 'marketing'];
 export const CHANNELS = ['whatsapp', 'sms', 'email', 'push'];
+// Campaigns can also go to customers' Google Wallet passes (push notification on the pass).
+export const CAMPAIGN_CHANNELS = [...CHANNELS, 'gwallet'];
 
 // What each role may open. Mirrored server-side in firestore.rules.
 export const PERMISSIONS = {

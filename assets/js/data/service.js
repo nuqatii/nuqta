@@ -478,7 +478,7 @@ export function createService({ db, auth, mode }) {
     async saveCampaign(bid, c) {
       await need(bid, 'campaigns'); const id = c.id || db.newId();
       await db.set(P.sub(bid, 'campaigns', id), {
-        name: L.clampStr(c.name, 80), segment: c.segment, channel: L.CHANNELS.includes(c.channel) ? c.channel : 'whatsapp',
+        name: L.clampStr(c.name, 80), segment: c.segment, channel: L.CAMPAIGN_CHANNELS.includes(c.channel) ? c.channel : 'whatsapp', header: L.clampStr(c.header || '', 60),
         message: L.clampStr(c.message, 1000), status: c.status || 'draft', recipients: c.recipients || 0,
         createdAt: c.createdAt || now(), preparedAt: c.preparedAt || null,
       });
@@ -508,7 +508,34 @@ export function createService({ db, auth, mode }) {
 
     // ── Locations & audit ──────────────────────────────────
     async listLocations(bid) { return db.list(P.sub(bid, 'locations')); },
-    async saveLocation(bid, l) { await need(bid, 'locations'); const id = l.id || db.newId(); await db.set(P.sub(bid, 'locations', id), { name: L.clampStr(l.name, 60), address: L.clampStr(l.address, 160), createdAt: l.createdAt || now() }); return id; },
+    async saveLocation(bid, l) {
+      await need(bid, 'locations'); const id = l.id || db.newId();
+      const num = (v, max) => { const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max && n !== 0 ? Math.round(n * 1e6) / 1e6 : null; };
+      await db.set(P.sub(bid, 'locations', id), { name: L.clampStr(l.name, 60), address: L.clampStr(l.address, 160), lat: num(l.lat, 90), lng: num(l.lng, 180), nearbyText: L.clampStr(l.nearbyText, 120), createdAt: l.createdAt || now() });
+      walletPing('b=' + encodeURIComponent(bid));   // wallet passes pick up the new location
+      return id;
+    },
+    // Sends a campaign to customers' Google Wallet passes (server checks the role again).
+    async sendWalletCampaign(bid, campaignId, items) {
+      await need(bid, 'campaigns');
+      if (mode === 'demo') {   // the demo has no Google account: pretend every pass received it
+        await db.update(P.sub(bid, 'campaigns', campaignId), { status: 'sent', sentAt: now(), walletSent: items.length, walletSilent: 0 });
+        return { sent: items.length, silent: 0, notInWallet: 0, failed: 0 };
+      }
+      const base = mode === 'firebase' ? walletFnUrl() : '';
+      if (!base) fail('wallet-off');
+      const token = await auth.idToken?.();
+      if (!token) fail('unauthenticated');
+      const total = { sent: 0, silent: 0, notInWallet: 0, failed: 0 };
+      for (let i = 0; i < items.length; i += 200) {
+        const r = await fetch(`${base}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ bid, campaignId, items: items.slice(i, i + 200) }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) fail(j.error || 'failed');
+        for (const k of Object.keys(total)) total[k] += j[k] || 0;
+      }
+      await audit(bid, 'campaign.wallet', { campaignId, ...total });
+      return total;
+    },
     async deleteLocation(bid, id) { await need(bid, 'locations'); if (id === 'main') fail('cannot-delete-main'); await db.remove(P.sub(bid, 'locations', id)); },
     async listAudit(bid) { await need(bid, 'settings'); return db.list(P.sub(bid, 'audit'), { orderBy: ['at', 'desc'], limit: 100 }); },
 
