@@ -1,17 +1,18 @@
 // Request handler for /gwallet/*. Firestore and Google are passed in so tests can fake them.
-import { buildClass, buildObject, classIdFor, saveClaims } from './pass.js';
+import { buildClass, buildObject, classIdFor, objectIdFor, saveClaims } from './pass.js';
 import { saveUrl } from './google.js';
 import { stampsPng } from './stamps.js';
 
 const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 
-export function createHandler({ firestore, google, config, apple = null }) {
+export function createHandler({ firestore, google, config, apple = null, verifyToken = null, L = null }) {
   const siteUrl = config.SITE_URL.endsWith('/') ? config.SITE_URL : config.SITE_URL + '/';
   const issuerId = () => String(config.GOOGLE_WALLET?.issuerId || '');
   const fnBase = () => `https://${config.GOOGLE_WALLET.region}-${config.FIREBASE.projectId}.cloudfunctions.net/gwallet`;
 
   const get = async (path) => { const s = await firestore.doc(path).get(); return s.exists ? { id: s.id, ...s.data() } : null; };
+  const locationsOf = async (bid) => (await firestore.collection(`businesses/${bid}/locations`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
   const rewardsOf = async (bid) => (await firestore.collection(`businesses/${bid}/rewards`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
   const logoUrl = (bid, b) => `${fnBase()}/logo?b=${bid}&v=${b.designVersion || 1}`;
   // The image depends only on the business design and the numbers, so every customer at the same step shares one cached image.
@@ -39,7 +40,7 @@ export function createHandler({ firestore, google, config, apple = null }) {
     if (!d || d.card.deleted) return page(res, 404, 'This card was not found.', 'لم نجد هذه البطاقة.');
     const iss = issuerId();
     const bid = d.card.businessId;
-    await google.upsertClass(buildClass({ issuerId: iss, bid, business: d.business, logoUrl: logoUrl(bid, d.business) }));
+    await google.upsertClass(buildClass({ issuerId: iss, bid, business: d.business, logoUrl: logoUrl(bid, d.business), locations: await locationsOf(bid) }));
     const obj = buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) });
     await google.upsertObject(obj);
     const t = Date.now();
@@ -60,7 +61,7 @@ export function createHandler({ firestore, google, config, apple = null }) {
       if (d && apple?.enabled() && d.card.walletApple) jobs.push(apple.touch(token, d.card));
     } else if (ID_RE.test(bid)) {
       const business = await get(`businesses/${bid}`);
-      if (business && iss) jobs.push(google.getClass(classIdFor(iss, bid)).then((c) => c && google.upsertClass(buildClass({ issuerId: iss, bid, business, logoUrl: logoUrl(bid, business) }))));
+      if (business && iss) jobs.push(google.getClass(classIdFor(iss, bid)).then(async (c) => c && google.upsertClass(buildClass({ issuerId: iss, bid, business, logoUrl: logoUrl(bid, business), locations: await locationsOf(bid) }))));
       if (business && apple?.enabled()) jobs.push(apple.touchBusiness(bid));
     }
     const out = await Promise.allSettled(jobs);
@@ -87,8 +88,48 @@ export function createHandler({ firestore, google, config, apple = null }) {
     res.set('Content-Type', 'image/png').set('Cache-Control', 'public, max-age=604800').send(Buffer.from(png));
   }
 
+  // Campaign messages to Google Wallet passes. Only signed-in owners/marketing staff of that business.
+  async function message(req, res) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+    const tok = String(req.get?.('authorization') || req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
+    let uid = null;
+    try { uid = tok && verifyToken ? (await verifyToken(tok)).uid : null; } catch { uid = null; }
+    if (!uid) return res.status(401).json({ error: 'unauthenticated' });
+    const { bid, campaignId, items } = req.body || {};
+    if (!ID_RE.test(String(bid || '')) || !Array.isArray(items) || !items.length || items.length > 500) return res.status(400).json({ error: 'invalid' });
+    const member = await get(`businesses/${bid}/members/${uid}`);
+    if (!member || !(L ? L.can(member.role, 'campaigns') : ['owner', 'marketing'].includes(member.role))) return res.status(403).json({ error: 'permission-denied' });
+    const business = await get(`businesses/${bid}`);
+    if (!business || (L && !L.canOperate(business))) return res.status(403).json({ error: 'subscription-ended' });
+    const iss = issuerId(); const stamp = Date.now();
+    const out = { sent: 0, silent: 0, notInWallet: 0, failed: 0 };
+    const clip = (v, n) => String(v || '').trim().slice(0, n);
+    let i = 0;
+    async function worker() {
+      while (i < items.length) {
+        const it = items[i++];
+        try {
+          const cid = String(it.customerId || '');
+          const c = /^[A-Za-z0-9_-]{1,80}$/.test(cid) ? await get(`businesses/${bid}/customers/${cid}`) : null;
+          if (!c || !c.walletGoogle || !c.cardToken) { out.notInWallet++; continue; }
+          const card = await get(`cards/${c.cardToken}`);
+          if (!card || card.deleted) { out.notInWallet++; continue; }
+          const r = await google.addMessage(objectIdFor(iss, card), { id: `m${stamp}_${cid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60), header: clip(it.header, 60), body: clip(it.body, 500) }, true);
+          if (r === 'missing') out.notInWallet++; else out[r]++;
+        } catch (e) { out.failed++; console.error('message', e.message); }
+      }
+    }
+    await Promise.all(Array.from({ length: 8 }, worker));
+    if (campaignId && /^[A-Za-z0-9_-]{4,64}$/.test(String(campaignId))) {
+      await firestore.doc(`businesses/${bid}/campaigns/${campaignId}`).set({ status: 'sent', sentAt: Date.now(), walletSent: out.sent, walletSilent: out.silent }, { merge: true }).catch(() => {});
+    }
+    res.status(200).json(out);
+  }
+
   return async function handler(req, res) {
     res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') return res.status(204).send('');
     const path = String(req.path || '/').replace(/^\/gwallet(?=\/|$)/, '');
     if (path.startsWith('/apple/') || path === '/apple') {
@@ -97,6 +138,7 @@ export function createHandler({ firestore, google, config, apple = null }) {
       catch (e) { console.error('apple', e); return res.status(500).send(''); }
     }
     const route = path.replace(/\/+$/, '').split('/').pop();
+    if (route === 'message') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await message(req, res); } catch (e) { console.error('message', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'sync') { try { return await sync(req, res); } catch (e) { console.error('sync', e); return res.status(204).send(''); } }
     if (!issuerId()) return page(res, 503, 'Google Wallet is not set up yet.', 'محفظة Google غير مفعّلة بعد.');
     try {

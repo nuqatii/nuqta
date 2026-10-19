@@ -8,6 +8,8 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+import * as L from './shared/loyalty.js';
 import { CONFIG } from './shared/config.js';
 import { createGoogle } from './google.js';
 import { createHandler } from './handler.js';
@@ -24,6 +26,6 @@ const firestore = getFirestore();
 const apple = createApple({ firestore, config: CONFIG, certs, push: certs ? createPusher({ certs, topic: CONFIG.APPLE_WALLET?.passTypeId }) : async () => [] });
 
 export const gwallet = onRequest(
-  { region: CONFIG.GOOGLE_WALLET?.region || 'europe-west1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30 },
-  createHandler({ firestore, google: createGoogle(), config: CONFIG, apple }),
+  { region: CONFIG.GOOGLE_WALLET?.region || 'europe-west1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 120 },
+  createHandler({ firestore, google: createGoogle(), config: CONFIG, apple, verifyToken: (t) => getAuth().verifyIdToken(t), L }),
 );

@@ -33,7 +33,7 @@ export function loadAppleCerts({ env = process.env, wwdr } = {}) {
 }
 
 // ── Pass contents (pure) ────────────────────────────────
-export function buildPassJson({ config, token, card, business, rewards, siteUrl, webServiceURL }) {
+export function buildPassJson({ config, token, card, business, rewards, siteUrl, webServiceURL, locations = [] }) {
   const A = config.APPLE_WALLET;
   const main = business.lang === 'en' ? 'en' : 'ar';
   const T = TXT[main];
@@ -80,6 +80,11 @@ export function buildPassJson({ config, token, card, business, rewards, siteUrl,
     voided: !!card.deleted,
     barcodes: card.deleted ? [] : [{ format: 'PKBarcodeFormatQR', message: String(card.qrValue || card.memberNumber || ''), messageEncoding: 'iso-8859-1', altText: String(card.memberNumber || '') }],
     storeCard: s,
+    // Shop branches: iPhone suggests the pass on the lock screen nearby, with the owner's text.
+    locations: card.deleted ? [] : (locations || [])
+      .map((l) => ({ latitude: Number(l.lat), longitude: Number(l.lng), relevantText: String(l.nearbyText || '').slice(0, 120) || undefined }))
+      .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && !(p.latitude === 0 && p.longitude === 0))
+      .slice(0, 10),
   };
 }
 
@@ -146,7 +151,8 @@ export function createApple({ firestore, config, certs, push, now = () => Date.n
     if (!TOKEN_RE.test(token || '')) return null;
     const card = await get(`cards/${token}`); if (!card) return null;
     const business = await get(`businesses/${card.businessId}`); if (!business) return null;
-    return { token, card, business, rewards: await rewardsOf(card.businessId) };
+    const locations = (await firestore.collection(`businesses/${card.businessId}/locations`).get()).docs.map((x) => x.data());
+    return { token, card, business, rewards: await rewardsOf(card.businessId), locations };
   }
   async function pkpassFor(d) {
     const passJson = buildPassJson({ config, ...d, siteUrl, webServiceURL: webServiceURL() });

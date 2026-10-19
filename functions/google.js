@@ -44,6 +44,19 @@ export function createGoogle({ auth = new GoogleAuth({ scopes: SCOPES }) } = {})
       await call('PUT', `/loyaltyObject/${enc(obj.id)}`, obj);
       return true;
     },
+    // Adds a message to one pass. notify=true also pushes a phone notification (Google allows 3 per pass per 24h);
+    // when that quota is used up the message is still added silently. Returns 'sent' | 'silent' | 'missing'.
+    async addMessage(objectId, message, notify = true) {
+      const send = (type) => call('POST', `/loyaltyObject/${enc(objectId)}/addMessage`, { message: { ...message, messageType: type } });
+      try {
+        const r = await send(notify ? 'TEXT_AND_NOTIFY' : 'TEXT');
+        if (r === null) return 'missing';
+        return notify ? 'sent' : 'silent';
+      } catch (e) {
+        if (notify && (e.status === 429 || /quota/i.test(e.message))) { await send('TEXT'); return 'silent'; }
+        throw e;
+      }
+    },
     async serviceEmail() {
       const c = await auth.getCredentials();
       if (!c?.client_email) throw new Error('Cannot find the service account email');

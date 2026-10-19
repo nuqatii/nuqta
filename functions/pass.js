@@ -25,7 +25,15 @@ export const objectIdFor = (issuerId, card) => `${issuerId}.card_${safe(card.bus
 const hex = (c, fallback = '#0F6E5C') => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : fallback);
 const liveRewards = (rewards) => (rewards || []).filter((r) => L.rewardIsLive(r));
 
-export function buildClass({ issuerId, bid, business, logoUrl }) {
+// Up to 10 shop locations for Google's "Nearby passes" notifications.
+export function merchantLocations(locations) {
+  return (locations || [])
+    .map((l) => ({ latitude: Number(l.lat), longitude: Number(l.lng) }))
+    .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude) && Math.abs(p.latitude) <= 90 && Math.abs(p.longitude) <= 180 && !(p.latitude === 0 && p.longitude === 0))
+    .slice(0, 10);
+}
+
+export function buildClass({ issuerId, bid, business, logoUrl, locations }) {
   const main = langOf(business);
   const d = business.design || {};
   const progEn = d.programName || business.name;
@@ -39,6 +47,7 @@ export function buildClass({ issuerId, bid, business, logoUrl }) {
     hexBackgroundColor: hex(business.colors?.bg),
     reviewStatus: 'UNDER_REVIEW',
     multipleDevicesAndHoldersAllowedStatus: 'ONE_USER_ALL_DEVICES',
+    merchantLocations: merchantLocations(locations),
   };
 }
 
