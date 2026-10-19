@@ -33,8 +33,8 @@ export const CONFIG = {
 
   // Apple Wallet. Leave passTypeId empty to hide the "Add to Apple Wallet" button (APPLE_WALLET_SETUP.md).
   APPLE_WALLET: {
-    passTypeId: '',             // e.g. 'pass.io.github.nuqatii.cards' (Apple Developer → Identifiers → Pass Type IDs)
-    teamId: '',                 // 10 characters, Apple Developer → Membership
+    passTypeId: 'pass.com.nuqatii.cards', // e.g. 'pass.io.github.nuqatii.cards' (Apple Developer → Identifiers → Pass Type IDs)
+    teamId: 'TNF54QZTNN',       // 10 characters, Apple Developer → Membership
     officialButton: false,      // true once Apple's badges are in assets/img (applewallet-ar.svg, applewallet-en.svg)
   },
 
@@ -44,7 +44,7 @@ export const CONFIG = {
     country: { en: 'Syria', ar: 'سوريا' },
     whatsapp: '+963953667748',
     email: '',                                  // optional; leave empty to hide
-    updated: '2026-10-18',                      // change when you edit the texts
+    updated: '2026-10-19',                      // change when you edit the texts
     retentionDays: 90,
   },
 

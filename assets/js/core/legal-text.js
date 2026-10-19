@@ -38,6 +38,7 @@ export const PRIVACY = {
         'The {name} team can see totals (such as number of members per business) to operate the service, but not customer names or phone numbers, except when needed to fix a problem or when the law requires it.',
         'Service providers that host the service for us: Google Firebase (database and sign-in) and GitHub Pages (website). Their servers may be in other countries.',
         'Google Wallet, only if you choose "Add to Google Wallet": your first name, member number, balance and card code are sent to Google to show the card on your phone. Google\'s own privacy policy then applies to the copy in your Google account.',
+        'Apple Wallet, only if you choose "Add to Apple Wallet": the same details are placed in a pass on your iPhone. Your phone checks our server for updates to the pass; Apple delivers the update notice but does not receive your balance.',
         'We never sell your information, and we do not share it with advertisers.',
       ]],
       ['How long we keep it', [
@@ -94,6 +95,7 @@ export const PRIVACY = {
         'يستطيع فريق {name} رؤية الأرقام الإجمالية (مثل عدد الأعضاء لكل نشاط) لتشغيل الخدمة، لكن ليس أسماء الزبائن أو أرقامهم، إلا عند الحاجة لإصلاح مشكلة أو عندما يتطلب القانون ذلك.',
         'مزوّدو الخدمات الذين يستضيفون الخدمة لنا: Google Firebase (قاعدة البيانات وتسجيل الدخول) وGitHub Pages (الموقع). قد تكون خوادمهم في دول أخرى.',
         'محفظة Google، فقط إذا اخترت "أضف إلى محفظة Google": يُرسل اسمك الأول ورقم عضويتك ورصيدك ورمز بطاقتك إلى Google لعرض البطاقة على هاتفك، وتسري سياسة خصوصية Google على النسخة المحفوظة في حسابك.',
+        'Apple Wallet، فقط إذا اخترت "أضف إلى Apple Wallet": توضع البيانات نفسها في بطاقة على هاتف iPhone، ويتحقق هاتفك من خادمنا لتحديثها. ترسل Apple إشعار التحديث فقط ولا تتلقى رصيدك.',
         'لا نبيع معلوماتك أبداً، ولا نشاركها مع المعلنين.',
       ]],
       ['مدة الاحتفاظ بالمعلومات', [
