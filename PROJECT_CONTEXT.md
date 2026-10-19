@@ -8,7 +8,7 @@ A multi-tenant SaaS for restaurants, cafés, salons and shops in **Damascus, Syr
 ## Where things live
 | | |
 |---|---|
-| Live site | https://nuqatii.github.io/nuqta/ (GitHub Pages, repo **nuqatii/nuqta**, branch `main`, root) |
+| Live site | https://nuqatii.com/ (custom domain since 19 Oct, GoDaddy DNS; old https://nuqatii.github.io/nuqta/ redirects) (GitHub Pages, repo **nuqatii/nuqta**, branch `main`, root) |
 | Pages | `index.html` public home page (home.js: what Nuqta is, live card preview, demo links + demo login, WhatsApp, legal links; added 16 Oct for Google's review) · `login.html` sign in/up (`?view=signup`) · `app.html` business portal · `rewards.html` customer join (`?b=slug`), card (`?c=token`), "My cards" (no params) · `admin.html` platform admin |
 | Firebase project | **nuqati-39894** (Auth: Email/Password · Firestore) — config already in `assets/js/config.js`, `MODE: 'firebase'` |
 | Google Wallet | Issuer ID **3388000000023205324** (in `config.js → GOOGLE_WALLET.issuerId`). This is the new issuer account, an individual business profile in a supported country, created 15 Oct 2026. The old Syria issuer 3388000000023216599 is not used. |
@@ -83,3 +83,4 @@ tests/                       node --test (logic, journeys, tenant isolation, i18
 - [ ] Hardening before real scale: move points/redemption/join into Cloud Functions; Firebase App Check; phone verification; join page currently reveals if a number is already a member.
 - [ ] Apple Wallet: user enrolls → sends Team ID + Pass Type ID → Claude makes the CSR + private key → user uploads the CSR and sends back pass.cer → Claude makes APPLE_PASS_CERT/KEY texts → GitHub secrets + WWDR file → config.js → test on iPhone → official badges.
 - [ ] Possible next features: card notifications (push) for automatic messages, pluggable SMS sender, optional group filter on automatic messages, Apple Wallet passes and phone-number recovery of cards.
+- [x] **Custom domain nuqatii.com (19 Oct, bought at GoDaddy):** `CNAME` file in repo root, `SITE_URL: 'https://nuqatii.com/'`. GoDaddy DNS: 4 A records @ → 185.199.108–111.153, CNAME www → nuqatii.github.io. GitHub Pages → Custom domain + Enforce HTTPS. Firebase Auth → Authorized domains: nuqatii.com + www.nuqatii.com. Old github.io links redirect. Note: "My cards" lists and installed apps are per-origin, so phones that used the old address start with an empty list (opening a card link or the wallet pass's link adds it back) and installed apps should be reinstalled from nuqatii.com.
