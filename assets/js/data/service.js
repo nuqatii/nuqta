@@ -3,6 +3,7 @@
 // same tenant + role boundaries server-side.
 import * as L from '../core/loyalty.js';
 import { walletFnUrl, appleFnUrl } from '../config.js';
+import { DEFAULT_FAQ, cleanFaq } from '../core/faq.js';
 const walletBase = () => (walletFnUrl() || appleFnUrl().replace(/\/apple$/, ''));
 
 const now = () => Date.now();
@@ -602,6 +603,21 @@ export function createService({ db, auth, mode }) {
         currency: L.clampStr(s.currency || 'USD', 6), prices,
         paymentInfo: L.clampStr(s.paymentInfo, 1000), supportWhatsapp: L.clampStr(s.supportWhatsapp, 20),
       });
+    },
+    // Home page FAQ (public). Falls back to the built-in questions until the admin saves a list.
+    async faq() {
+      const d = await db.get('platform/faq').catch(() => null);
+      return { items: d && Array.isArray(d.items) ? cleanFaq(d.items) : DEFAULT_FAQ, custom: !!d, updatedAt: d?.updatedAt || null };
+    },
+    async adminSaveFaq(items) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const clean = cleanFaq(items);
+      await db.set('platform/faq', { items: clean, updatedAt: now(), by: user()?.email || '' });
+      return clean;
+    },
+    async adminResetFaq() {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      await db.remove('platform/faq');
     },
   };
   return S;

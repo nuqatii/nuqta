@@ -1,6 +1,7 @@
 // Renders privacy.html / terms.html in Arabic or English.
 import { CONFIG } from '../config.js';
 import { PRIVACY, TERMS } from '../core/legal-text.js';
+import { whatsappUrl } from '../core/faq.js';
 
 const root = document.getElementById('root');
 const which = document.body.dataset.doc === 'terms' ? 'terms' : 'privacy';
@@ -20,7 +21,6 @@ function render() {
   document.title = d.title;
   const other = which === 'privacy' ? 'terms' : 'privacy';
   const date = new Intl.DateTimeFormat(ar ? 'ar-SY-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(L.updated));
-  const wa = L.whatsapp.replace(/[^\d]/g, '');
   root.className = 'legal';
   root.innerHTML = `
     <header class="legal-head">
@@ -35,7 +35,7 @@ function render() {
       ${d.sections.map(([h, ...blocks], i) => `<section id="s${i + 1}"><h2>${i + 1}. ${fill(h)}</h2>${blocks.map((b) => (Array.isArray(b) ? `<ul>${b.map((x) => `<li>${fill(x)}</li>`).join('')}</ul>` : `<p>${fill(b)}</p>`)).join('')}</section>`).join('')}
       <section id="contact"><h2>${ar ? 'تواصل معنا' : 'Contact us'}</h2>
         <p>${ar ? 'لأي سؤال أو طلب يتعلق بهذه الوثيقة أو ببياناتك:' : 'For any question or request about this document or your data:'}</p>
-        <p><a class="btn" href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp <span class="ltr">${esc(L.whatsapp)}</span></a>
+        <p><a class="btn wa" href="${whatsappUrl(lang)}" target="_blank" rel="noopener">${ar ? 'تواصل معنا عبر واتساب' : 'Chat with us on WhatsApp'}</a>
         ${L.email ? ` <a class="btn ghost" href="mailto:${esc(L.email)}">${esc(L.email)}</a>` : ''}</p>
       </section>
       <p class="small"><a href="${other}.html?lang=${lang}">${other === 'terms' ? (ar ? 'شروط الخدمة' : 'Terms of Service') : (ar ? 'سياسة الخصوصية' : 'Privacy Policy')}</a></p>

@@ -575,3 +575,18 @@ a.wtile:active { transform: scale(.985); }
 .home-tag { margin: 0 0 10px; font-weight: 700; font-size: 1rem; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .auth-pitch .brandmark .dot { background-image: url(../img/mark-white.svg); }
 .cust-head .wdot { width: 24px !important; height: 24px !important; border-radius: 0 !important; box-shadow: none !important; background: url(../img/mark.svg) center / contain no-repeat !important; flex: none; }
+
+/* WhatsApp button + home FAQ */
+.btn.wa { --b: #25D366; --c: #fff; --bd: #25D366; }
+.btn.wa:hover { --b: #1EBE5A; --bd: #1EBE5A; }
+.btn.wa svg { width: 18px; height: 18px; }
+.home-faq { display: flex; flex-direction: column; gap: 10px; max-width: 820px; }
+.home-faq details { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.home-faq summary { cursor: pointer; list-style: none; padding: 14px 16px; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.home-faq summary::-webkit-details-marker { display: none; }
+.home-faq summary::after { content: '+'; font-size: 1.3rem; line-height: 1; color: var(--brand); flex: none; }
+.home-faq details[open] summary::after { content: '−'; }
+.home-faq details p { margin: 0; padding: 0 16px 16px; white-space: pre-line; }
+.home-faq-more { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: var(--ink-2); }
+.faq-ed li { align-items: flex-start; }
+.faq-ed .t { white-space: normal; }

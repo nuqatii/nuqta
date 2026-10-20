@@ -3,10 +3,13 @@ import { CONFIG } from '../config.js';
 import { setLang, lang } from '../core/i18n.js';
 import { renderCard } from '../ui/card.js';
 import { icon } from '../ui/ui.js';
+import { DEFAULT_FAQ, faqText, whatsappUrl } from '../core/faq.js';
+import { getService } from '../data/index.js';
 
 const root = document.getElementById('root');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const DEMO_CARD = 'demoMayaCard7Qp2xKw9Lr4Tz';
+let faqItems = DEFAULT_FAQ;
 
 const H = {
   en: {
@@ -26,16 +29,16 @@ const H = {
       ['palette', 'Your brand', 'Logo, colours and card design that match your shop.'],
       ['star', 'Points, stamps or visits', 'Pick the program that fits, with rewards and membership tiers.'],
       ['users', 'Customer list', 'See who your regulars are, who is new, and who hasn’t visited in a while.'],
-      ['send', 'Campaigns', 'Prepare offers for groups of customers and send them on WhatsApp.'],
+      ['send', 'Campaigns', 'Prepare offers for groups of customers and send them on WhatsApp or straight to their Google Wallet card.'],
       ['team', 'Staff accounts', 'Owners, managers, cashiers and marketing, each with the right access.'],
       ['shield', 'Private by design', 'Each business sees only its own customers. Customers can ask to delete their data at any time.'],
     ],
     walletTitle: 'Works with phone wallets',
-    wallet: 'Customers can save their card to Google Wallet (and soon Apple Wallet). The pass shows the business’s logo, the customer’s name and member number, their points or stamps, rewards ready, and a QR code for the cashier. It updates by itself after every visit.',
+    wallet: 'Customers can save their card to Google Wallet or Apple Wallet. The pass shows the business’s logo, the customer’s name and member number, their points or stamps, rewards ready, and a QR code for the cashier. It updates by itself after every visit.',
     demoTitle: 'Try it',
     demoText: 'The demo runs entirely in your browser with sample data, so nothing you do there is saved or affects real businesses.',
     demoLogin: 'Demo business login', email: 'Email', password: 'Password',
-    contact: 'Questions? Talk to us on WhatsApp', privacy: 'Privacy Policy', terms: 'Terms of Service',
+    contact: 'Chat with us on WhatsApp', faqTitle: 'Frequently asked questions', faqMore: 'Still have a question?', privacy: 'Privacy Policy', terms: 'Terms of Service',
     preview: { name: 'Coffee Corner', program: 'Coffee Club', member: 'Maya' },
   },
   ar: {
@@ -55,16 +58,16 @@ const H = {
       ['palette', 'علامتك التجارية', 'شعار وألوان وتصميم بطاقة يناسب محلّك.'],
       ['star', 'نقاط أو أختام أو زيارات', 'اختر البرنامج المناسب مع مكافآت ومستويات عضوية.'],
       ['users', 'قائمة الزبائن', 'اعرف زبائنك الدائمين والجدد ومن غاب منذ فترة.'],
-      ['send', 'حملات', 'حضّر عروضاً لمجموعات من الزبائن وأرسلها عبر واتساب.'],
+      ['send', 'حملات', 'حضّر عروضاً لمجموعات من الزبائن وأرسلها عبر واتساب أو مباشرة إلى بطاقتهم في محفظة Google.'],
       ['team', 'حسابات الموظفين', 'مالك ومدير وكاشير وتسويق، لكلٍّ صلاحياته.'],
       ['shield', 'الخصوصية أولاً', 'يرى كل نشاط زبائنه فقط، ويمكن للزبون طلب حذف بياناته في أي وقت.'],
     ],
     walletTitle: 'تعمل مع محافظ الهاتف',
-    wallet: 'يمكن للزبائن حفظ بطاقتهم في محفظة Google (وقريباً Apple Wallet). تعرض البطاقة شعار النشاط واسم الزبون ورقم عضويته ونقاطه أو أختامه والمكافآت الجاهزة ورمز QR للكاشير، وتتحدّث تلقائياً بعد كل زيارة.',
+    wallet: 'يمكن للزبائن حفظ بطاقتهم في محفظة Google أو Apple Wallet. تعرض البطاقة شعار النشاط واسم الزبون ورقم عضويته ونقاطه أو أختامه والمكافآت الجاهزة ورمز QR للكاشير، وتتحدّث تلقائياً بعد كل زيارة.',
     demoTitle: 'جرّبها',
     demoText: 'النسخة التجريبية تعمل بالكامل داخل متصفحك ببيانات نموذجية، فلا يُحفظ شيء ولا يؤثر على أي نشاط حقيقي.',
     demoLogin: 'دخول النشاط التجريبي', email: 'البريد الإلكتروني', password: 'كلمة المرور',
-    contact: 'لديك سؤال؟ راسلنا على واتساب', privacy: 'سياسة الخصوصية', terms: 'شروط الاستخدام',
+    contact: 'تواصل معنا عبر واتساب', faqTitle: 'الأسئلة الشائعة', faqMore: 'لديك سؤال آخر؟', privacy: 'سياسة الخصوصية', terms: 'شروط الاستخدام',
     preview: { name: 'ركن القهوة', program: 'نادي القهوة', member: 'مايا' },
   },
 };
@@ -77,7 +80,7 @@ function previewCard(T) {
 
 function render() {
   const T = H[lang] || H.en; const ar = lang === 'ar';
-  const L = CONFIG.LEGAL; const wa = L.whatsapp.replace(/[^\d]/g, '');
+  const wa = whatsappUrl(lang);
   const name = CONFIG.APP_NAME[lang] || CONFIG.APP_NAME.en;
   document.title = `${name} · ${T.title}`;
   root.className = 'home';
@@ -109,12 +112,37 @@ function render() {
         <span>${T.demoLogin}:<br>${T.email}: <code class="ltr">owner@joespizza.demo</code><br>${T.password}: <code class="ltr">demo1234</code></span></a>
     </div>
   </section>
+  <section class="home-sec" id="faq"><h2>${T.faqTitle}</h2>
+    <div class="home-faq" id="faqList">${faqHtml()}</div>
+    <div class="home-faq-more"><span>${T.faqMore}</span><a class="btn wa" href="${wa}" target="_blank" rel="noopener">${icon('whatsapp')}${T.contact}</a></div>
+  </section>
   <footer class="home-foot">
-    <a class="btn" href="https://wa.me/${wa}" target="_blank" rel="noopener">${icon('whatsapp')}${T.contact} <span class="ltr">${esc(L.whatsapp)}</span></a>
+    <a class="btn wa" href="${wa}" target="_blank" rel="noopener">${icon('whatsapp')}${T.contact}</a>
     <div class="home-links"><a href="privacy.html">${T.privacy}</a><a href="terms.html">${T.terms}</a><span>© ${new Date().getFullYear()} ${esc(name)}</span></div>
   </footer>`;
   document.getElementById('lang').onclick = () => { setLang(ar ? 'en' : 'ar'); render(); };
+  faqSchema();
 }
+
+function faqHtml() {
+  return faqItems.map((x) => `<details><summary>${esc(faqText(x.q, lang))}</summary><p>${esc(faqText(x.a, lang))}</p></details>`).join('');
+}
+
+// Lets Google show the questions in search results.
+function faqSchema() {
+  let el = document.getElementById('faq-ld');
+  if (!el) { el = document.createElement('script'); el.type = 'application/ld+json'; el.id = 'faq-ld'; document.head.appendChild(el); }
+  el.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: faqItems.map((x) => ({ '@type': 'Question', name: faqText(x.q, lang), acceptedAnswer: { '@type': 'Answer', text: faqText(x.a, lang) } })) });
+}
+
+// The admin can edit the FAQ (admin.html); show the saved version once it loads.
+getService().then((S) => S.faq()).then((f) => {
+  faqItems = f.items;
+  const box = document.getElementById('faqList');
+  if (box) box.innerHTML = faqHtml();
+  faqSchema();
+}).catch(() => {});
 
 const q = new URLSearchParams(location.search).get('lang');
 if (q === 'ar' || q === 'en') setLang(q);

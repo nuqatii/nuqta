@@ -4,6 +4,7 @@ import { getService } from '../data/index.js';
 import { t, setLang, lang, appName, fmtNum, fmtMoney, ago, fmtDate } from '../core/i18n.js';
 import { DAY, accessState, PLANS, PAID_PLANS, extendPaid, extendTrial } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, confirmBox, modal } from '../ui/ui.js';
+import { faqText } from '../core/faq.js';
 
 const S = await getService();
 const root = document.getElementById('root');
@@ -13,7 +14,7 @@ let filter = 'all';
 async function render() {
   if (!S.auth.current()) return location.replace('login.html?next=admin.html');
   if (!(await S.isPlatformAdmin())) { root.className = 'center-load'; root.innerHTML = `<div class="empty">${icon('shield')}<p>${t('ad_not_admin')}</p><a class="btn" href="app.html">${t('back')}</a></div>`; return; }
-  const [list, settings] = await Promise.all([S.adminListBusinesses(), S.adminSettings()]);
+  const [list, settings, faq] = await Promise.all([S.adminListBusinesses(), S.adminSettings(), S.faq()]);
   const now = Date.now();
   const rows = list.map((b) => ({ ...b, acc: accessState(b, now) }));
   const is = (r, f) => f === 'all' || (f === 'trial' && r.acc.state === 'trial') || (f === 'active' && r.acc.state === 'active')
@@ -72,6 +73,12 @@ async function render() {
         </ul></div></section>
       </div>
     </div>
+    <section class="panel" style="margin-top:16px"><div class="panel-h"><div><h2>${t('fq_title')} <span class="chip ${faq.custom ? 'brand' : ''}">${faq.custom ? t('fq_custom') : t('fq_default')}</span></h2><p class="small muted" style="margin:4px 0 0">${t('fq_hint')}</p></div>
+      <div class="row wrap"><a class="btn ghost sm" href="index.html#faq" target="_blank" rel="noopener">${icon('globe')}nuqatii.com</a><button class="btn sm primary" id="fqAdd">${icon('plus')}${t('fq_add')}</button></div></div>
+      <div class="panel-b"><ul class="list faq-ed">${faq.items.map((x, i) => `<li><span class="grow"><span class="t">${esc(faqText(x.q, lang))}</span><span class="s">${esc(faqText(x.a, lang).slice(0, 140))}${faqText(x.a, lang).length > 140 ? '…' : ''}</span></span>
+        <span class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn sm icon" data-fup="${i}" ${i ? '' : 'disabled'} aria-label="${t('fq_up')}">↑</button><button class="btn sm icon" data-fdn="${i}" ${i < faq.items.length - 1 ? '' : 'disabled'} aria-label="${t('fq_down')}">↓</button>
+        <button class="btn sm icon" data-fed="${i}" aria-label="${t('fq_edit')}">${icon('edit')}</button><button class="btn sm icon" data-fdel="${i}" aria-label="${t('delete')}">${icon('trash')}</button></span></li>`).join('')}</ul>
+      ${faq.custom ? `<div style="margin-top:12px"><button class="btn ghost sm" id="fqReset">${t('fq_reset')}</button></div>` : ''}</div></section>
   </main>`;
 
   $('#lang').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); render(); };
@@ -79,6 +86,21 @@ async function render() {
   root.querySelectorAll('[data-f]').forEach((x) => (x.onclick = () => { filter = x.dataset.f; render(); }));
   root.querySelectorAll('[data-pay]').forEach((x) => (x.onclick = () => payDialog(rows.find((r) => r.id === x.dataset.pay), settings)));
   root.querySelectorAll('[data-more]').forEach((x) => (x.onclick = () => moreDialog(rows.find((r) => r.id === x.dataset.more))));
+  const items = faq.items.map((x) => ({ q: { ...x.q }, a: { ...x.a } }));
+  const saveFaq = async (next) => { try { await S.adminSaveFaq(next); toast(t('saved')); render(); } catch (err) { showError(err); } };
+  const move = (i, d) => { const n = items.slice(); [n[i], n[i + d]] = [n[i + d], n[i]]; saveFaq(n); };
+  root.querySelectorAll('[data-fup]').forEach((x) => (x.onclick = () => move(+x.dataset.fup, -1)));
+  root.querySelectorAll('[data-fdn]').forEach((x) => (x.onclick = () => move(+x.dataset.fdn, 1)));
+  root.querySelectorAll('[data-fed]').forEach((x) => (x.onclick = () => faqDialog(items, +x.dataset.fed, saveFaq)));
+  root.querySelectorAll('[data-fdel]').forEach((x) => (x.onclick = async () => {
+    const i = +x.dataset.fdel;
+    if (await confirmBox(t('fq_del'), faqText(items[i].q, lang), t('delete'), 'danger')) saveFaq(items.filter((_, j) => j !== i));
+  }));
+  $('#fqAdd').onclick = () => faqDialog(items, -1, saveFaq);
+  if ($('#fqReset')) $('#fqReset').onclick = async () => {
+    if (!(await confirmBox(t('fq_reset'), t('fq_reset_q'), t('fq_reset'), 'danger'))) return;
+    try { await S.adminResetFaq(); toast(t('saved')); render(); } catch (err) { showError(err); }
+  };
   $('#ps').onsubmit = async (e) => {
     e.preventDefault();
     try { await S.adminSaveSettings({ ...settings, signupsOpen: e.target.signupsOpen.checked, announcement: e.target.announcement.value }); toast(t('saved')); } catch (err) { showError(err); }
@@ -89,6 +111,24 @@ async function render() {
     try { await S.adminSaveSettings({ ...settings, trialDays: f.trialDays.value, currency: f.currency.value.trim() || 'USD', prices, paymentInfo: f.paymentInfo.value, supportWhatsapp: f.supportWhatsapp.value.trim() }); toast(t('saved')); render(); }
     catch (err) { showError(err); }
   };
+}
+
+// Add (i = -1) or edit one FAQ question, in Arabic and English.
+function faqDialog(items, i, save) {
+  const x = i >= 0 ? items[i] : { q: { ar: '', en: '' }, a: { ar: '', en: '' } };
+  const body = `<form class="form" id="fq">
+    <label class="field"><span>${t('fq_q_ar')}</span><input class="input" name="qar" maxlength="200" dir="rtl" value="${esc(x.q.ar)}"></label>
+    <label class="field"><span>${t('fq_a_ar')}</span><textarea class="input" name="aar" maxlength="1500" dir="rtl" rows="5">${esc(x.a.ar)}</textarea></label>
+    <label class="field"><span>${t('fq_q_en')}</span><input class="input" name="qen" maxlength="200" dir="ltr" value="${esc(x.q.en)}"></label>
+    <label class="field"><span>${t('fq_a_en')}</span><textarea class="input" name="aen" maxlength="1500" dir="ltr" rows="5">${esc(x.a.en)}</textarea></label>
+    <p class="small muted">${t('fq_days')}</p></form>`;
+  modal({ title: i >= 0 ? t('fq_edit') : t('fq_add'), wide: true, body, actions: [{ label: t('cancel'), value: false }, { label: t('save'), kind: 'primary', onClick: async (m) => {
+    const f = $('#fq', m);
+    const it = { q: { ar: f.qar.value.trim(), en: f.qen.value.trim() }, a: { ar: f.aar.value.trim(), en: f.aen.value.trim() } };
+    if (!((it.q.ar && it.a.ar) || (it.q.en && it.a.en))) { toast(t('fq_need')); return false; }
+    const next = items.slice(); if (i >= 0) next[i] = it; else next.push(it);
+    await save(next); return true;
+  } }] });
 }
 
 // Record a payment and add months of paid time.
