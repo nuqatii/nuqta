@@ -1,6 +1,6 @@
 // Offline fallback so "My cards" and a card still open on a weak connection.
 // Network first for everything (so updates you push reach customers immediately); cache only as a fallback.
-const CACHE = 'nuqta-v6';
+const CACHE = 'nuqta-v7';
 const SHELL = ['rewards.html', 'assets/css/app.css', 'assets/vendor/qrcode.js', 'assets/vendor/jsbarcode.min.js', 'assets/img/icon.svg', 'assets/img/icon-192.png', 'manifest.json'];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
