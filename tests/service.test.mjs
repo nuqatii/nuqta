@@ -55,7 +55,7 @@ test('demo seed has the promised shape', async () => {
 
 test('owner journey: create business → join → purchase → redeem', async () => {
   await S.signOut();
-  await S.signUp('new@cafe.test', 'secret1', 'Rasha');
+  await S.signUp('new@cafe.test', 'secret1', 'Rasha'); S.auth._confirmEmail(); await S.checkVerified();
   const b = await S.createBusiness({ name: 'Rasha Café', type: 'cafe', termsAccepted: true, programType: 'points', firstReward: { name: 'Free coffee', cost: 50 } });
   assert.equal(b.slug, 'rasha-cafe');
   const j = await S.joinProgram('rasha-cafe', { firstName: 'Maya', phone: '0944 000 111' });
@@ -92,9 +92,16 @@ test('tenant isolation and roles', async () => {
   assert.equal(ok.rewardName, 'Free dessert');
 });
 
-test('invited staff claims their role on sign-up', async () => {
+test('invited staff get their role only after confirming their email', async () => {
   await S.signOut();
   await S.signUp('new.cashier@joespizza.demo', 'secret1', 'Hadi');
+  assert.equal(S.needsVerification(), true);
+  assert.equal((await S.myMemberships()).length, 0);
+  await assert.rejects(S.createBusiness({ name: 'Sneaky', termsAccepted: true }), /email-not-verified/);
+  assert.equal(await S.checkVerified(), false);   // link not tapped yet
+  S.auth._confirmEmail();
+  assert.equal(await S.checkVerified(), true);
+  assert.equal(S.needsVerification(), false);
   const ms = await S.myMemberships();
   assert.equal(ms[0]?.role, 'staff');
 });
@@ -139,7 +146,7 @@ test('expired business is locked; admin payment unlocks it', async () => {
 
 test('new businesses start on the platform trial length', async () => {
   await S.signOut();
-  await S.signUp('trial@shop.test', 'secret1', 'T');
+  await S.signUp('trial@shop.test', 'secret1', 'T'); S.auth._confirmEmail(); await S.checkVerified();
   const b = await S.createBusiness({ name: 'Trial Shop', type: 'retail', termsAccepted: true });
   assert.equal(b.plan, 'trial');
   assert.equal(L.accessState(b).state, 'trial');
@@ -165,7 +172,7 @@ test('stamp cards count in rounds: progress resets, rewards stack, redeeming tak
 
 test('terms must be accepted; customers can ask for deletion and the owner removes their details', async () => {
   await S.signOut();
-  await S.signUp('legal@shop.test', 'secret1', 'L');
+  await S.signUp('legal@shop.test', 'secret1', 'L'); S.auth._confirmEmail(); await S.checkVerified();
   await assert.rejects(S.createBusiness({ name: 'No Terms', type: 'retail' }), /terms-required/);
   const b = await S.createBusiness({ name: 'Legal Shop', type: 'retail', termsAccepted: true, termsVersion: '2026-10-13' });
   assert.equal(b.terms.version, '2026-10-13');

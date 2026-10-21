@@ -11,6 +11,7 @@ service cloud.firestore {
   match /databases/{db}/documents {
 
     function signedIn() { return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous'; }
+    function emailVerified() { return request.auth.token.get('email_verified', false) == true; }
     function uid() { return request.auth.uid; }
     function isAdmin() { return signedIn() && exists(/databases/$(db)/documents/platformAdmins/$(uid())); }
     function bizPath(bid) { return /databases/$(db)/documents/businesses/$(bid); }
@@ -66,7 +67,7 @@ service cloud.firestore {
     match /businesses/{bid} {
       allow get: if true;                // branding, program and tiers power the public join/card pages
       allow list: if isAdmin();
-      allow create: if signedIn() && !isAdmin()        // admin accounts never own a business
+      allow create: if signedIn() && !isAdmin() && emailVerified()   // admin accounts never own a business; email confirmed once
         && request.resource.data.ownerUid == uid()
         && request.resource.data.status == 'active' && request.resource.data.plan == 'trial'
         && request.resource.data.memberSeq == 0
@@ -84,7 +85,7 @@ service cloud.firestore {
         allow read: if (signedIn() && resource.data.uid == uid()) || owner(bid) || isAdmin();
         allow create: if signedIn() && m == uid() && request.resource.data.uid == uid() && request.resource.data.businessId == bid && (
              (request.resource.data.role == 'owner' && creatingOwnBusiness(bid))
-          || (exists(/databases/$(db)/documents/businesses/$(bid)/invites/$(request.auth.token.email))
+          || (emailVerified() && exists(/databases/$(db)/documents/businesses/$(bid)/invites/$(request.auth.token.email))
               && get(/databases/$(db)/documents/businesses/$(bid)/invites/$(request.auth.token.email)).data.role == request.resource.data.role
               && request.resource.data.role in ['manager', 'staff', 'marketing']));
         allow update: if owner(bid) && resource.data.role != 'owner' && onlyChanged(['role']) && request.resource.data.role in ['manager', 'staff', 'marketing'];
