@@ -13,6 +13,8 @@ async function routeAfterLogin() {
   // The platform admin account only ever uses the admin console. To run your own shop,
   // sign up with a separate email like any other business.
   if (await S.isPlatformAdmin()) return location.replace('admin.html');
+  // New accounts confirm their email once before they can create a business or join one as staff.
+  if (S.needsVerification() && !(await S.checkVerified().catch(() => false))) return renderVerify();
   const next = new URLSearchParams(location.search).get('next');
   if (next && /^(app|rewards)\.html/.test(next)) return location.replace(next);
   location.replace('app.html');
@@ -88,6 +90,45 @@ function render() {
     try { await S.signIn(a.email, a.password); await routeAfterLogin(); } catch (err) { showError(err); }
   }));
   if (S.mode !== 'demo') $('#f').email.focus();
+}
+
+// "Check your email" screen. Checks by itself every few seconds and whenever the person comes back to this tab.
+let verifyTimer = null;
+function renderVerify() {
+  const u = S.auth.current();
+  document.title = t('vf_title');
+  root.className = 'verify-page';
+  root.innerHTML = `
+  <section class="auth-form verify-box" style="position:relative">
+    <button class="btn ghost sm lang-btn" id="lang">${icon('globe')}${t('switch_lang')}</button>
+    <div class="verify-ic">${icon('send')}</div>
+    <h1>${t('vf_title')}</h1>
+    <p>${t('vf_sent', { email: `<b class="ltr">${esc(u?.email || '')}</b>` })}</p>
+    <p class="small muted">${t('vf_once')}</p>
+    <div class="note">${icon('info')}<span>${t('vf_spam')}</span></div>
+    <button class="btn primary lg block" id="vfDone">${t('vf_done')}</button>
+    <button class="btn block" id="vfResend">${t('vf_resend')}</button>
+    <p class="small muted" style="text-align:center">${t('vf_wrong')} <a href="#" id="vfOut">${t('vf_signout')}</a></p>
+  </section>`;
+  const check = async (manual) => {
+    const ok = await S.checkVerified().catch(() => false);
+    if (ok) { clearInterval(verifyTimer); removeEventListener('focus', onFocus); toast(t('vf_ok')); return routeAfterLogin(); }
+    if (manual) toast(t('vf_not_yet'), 'bad');
+  };
+  const onFocus = () => check(false);
+  clearInterval(verifyTimer); verifyTimer = setInterval(() => check(false), 5000);
+  addEventListener('focus', onFocus);
+  $('#lang').onclick = () => { setLang(lang === 'ar' ? 'en' : 'ar'); renderVerify(); };
+  $('#vfDone').onclick = async (e) => { e.target.disabled = true; await check(true); e.target.disabled = false; };
+  let wait = 0;
+  $('#vfResend').onclick = async (e) => {
+    const b = e.target.closest('button'); if (wait) return;
+    b.disabled = true;
+    try { await S.resendVerification(); toast(t('vf_resent')); } catch (err) { showError(err); }
+    wait = 60;
+    const tick = setInterval(() => { wait--; b.textContent = wait ? t('vf_resend_in', { n: wait }) : t('vf_resend'); if (!wait) { clearInterval(tick); b.disabled = false; } }, 1000);
+  };
+  $('#vfOut').onclick = async (e) => { e.preventDefault(); clearInterval(verifyTimer); await S.signOut(); view = 'signup'; render(); };
 }
 
 if (S.auth.current() && !new URLSearchParams(location.search).has('view')) await routeAfterLogin();

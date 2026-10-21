@@ -14,7 +14,7 @@ export function createMemoryAuth() {
   const listeners = new Set();
   const current = () => {
     const uid = localStorage.getItem(SESSION); const u = uid && Object.values(users()).find((x) => x.uid === uid);
-    return u ? { uid: u.uid, email: u.email, name: u.name } : null;
+    return u ? { uid: u.uid, email: u.email, name: u.name, emailVerified: u.verified !== false } : null;
   };
   const emit = () => listeners.forEach((cb) => cb(current()));
 
@@ -32,7 +32,7 @@ export function createMemoryAuth() {
       if (all[email]) throw err('auth/email-already-in-use');
       const salt = crypto.getRandomValues(new Uint32Array(2)).join('');
       const uid = 'u_' + Math.random().toString(36).slice(2, 12);
-      all[email] = { uid, email, name: name || '', salt, hash: await hash(password, salt) };
+      all[email] = { uid, email, name: name || '', salt, hash: await hash(password, salt), verified: false };
       saveUsers(all); localStorage.setItem(SESSION, uid); emit();
       return current();
     },
@@ -45,6 +45,11 @@ export function createMemoryAuth() {
     },
     async signOut() { localStorage.removeItem(SESSION); emit(); },
     async resetPassword() { throw err('auth/demo-no-email'); },
+    // The demo can't send email: a check a few seconds after "sending" counts as tapping the link.
+    async sendVerification() { const all = users(); const u = Object.values(all).find((x) => x.uid === localStorage.getItem(SESSION)); if (u) { u.pending = Date.now(); saveUsers(all); } },
+    async reload() { const all = users(); const u = Object.values(all).find((x) => x.uid === localStorage.getItem(SESSION)); if (u?.pending && Date.now() - u.pending > 3000) { u.verified = true; delete u.pending; saveUsers(all); } return current(); },
+    // Test helper: behave as if the link in the email was tapped.
+    _confirmEmail() { const all = users(); const u = Object.values(all).find((x) => x.uid === localStorage.getItem(SESSION)); if (u) { u.pending = 1; saveUsers(all); } },
     // Seeding helper
     async _createUser(email, password, name, uid) {
       const all = users(); const salt = 'seed' + uid;

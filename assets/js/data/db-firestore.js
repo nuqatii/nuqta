@@ -85,7 +85,7 @@ export function createFirestoreDB({ app, fs }) {
 
 export function createFirebaseAuth({ app, authMod: a }) {
   const auth = a.getAuth(app);
-  const map = (u) => (u && !u.isAnonymous ? { uid: u.uid, email: (u.email || '').toLowerCase(), name: u.displayName || '' } : null);
+  const map = (u) => (u && !u.isAnonymous ? { uid: u.uid, email: (u.email || '').toLowerCase(), name: u.displayName || '', emailVerified: !!u.emailVerified } : null);
   return {
     kind: 'firebase',
     current: () => map(auth.currentUser),
@@ -100,5 +100,19 @@ export function createFirebaseAuth({ app, authMod: a }) {
     signOut: () => a.signOut(auth),
     resetPassword: (email) => a.sendPasswordResetEmail(auth, email),
     idToken: () => auth.currentUser?.getIdToken() || null,
+    // One-time email confirmation. The link comes back to login.html, which continues automatically.
+    async sendVerification(language) {
+      if (!auth.currentUser) return;
+      auth.languageCode = language || 'ar';
+      const url = location.href.replace(/[^/]*([?#].*)?$/, '') + 'login.html?verified=1';
+      await a.sendEmailVerification(auth.currentUser, { url });
+    },
+    // Re-reads the account after the link was tapped; refreshes the token so the security rules see it too.
+    async reload() {
+      if (!auth.currentUser) return null;
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) await auth.currentUser.getIdToken(true);
+      return map(auth.currentUser);
+    },
   };
 }

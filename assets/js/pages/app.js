@@ -65,6 +65,7 @@ const ctx = {
 async function boot() {
   if (!ctx.user) return location.replace('login.html?next=app.html');
   if (await S.isPlatformAdmin()) return location.replace('admin.html');   // admin accounts don't run a business
+  if (S.needsVerification()) return location.replace('login.html?next=app.html');   // confirm the email once
   ctx.platform = await S.platformSettings().catch(() => null);
   ctx.memberships = await S.myMemberships();
   if (!ctx.memberships.length) {

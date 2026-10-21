@@ -590,3 +590,12 @@ a.wtile:active { transform: scale(.985); }
 .home-faq-more { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; color: var(--ink-2); }
 .faq-ed li { align-items: flex-start; }
 .faq-ed .t { white-space: normal; }
+
+/* One-time email confirmation */
+.verify-page { display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+.verify-box { max-width: 460px; width: 100%; margin: auto; gap: 14px; text-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg, 20px); padding: 28px 22px !important; }
+.verify-box .lang-btn { position: absolute; top: 14px; inset-inline-end: 14px; }
+.verify-box h1 { margin: 0; }
+.verify-box p { margin: 0; line-height: 1.7; }
+.verify-ic { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--brand-tint); color: var(--brand); }
+.verify-ic svg { width: 28px; height: 28px; }

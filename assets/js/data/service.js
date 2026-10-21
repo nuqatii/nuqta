@@ -70,8 +70,20 @@ export function createService({ db, auth, mode }) {
 
     // ── Auth & memberships ─────────────────────────────────
     // Claiming staff invites must never block signing in (e.g. while a database index is still building).
-    async signUp(email, password, name) { const u = await auth.signUp(email, password, name); await S.claimInvites().catch((e) => console.warn('claimInvites', e)); return u; },
+    async signUp(email, password, name) {
+      const u = await auth.signUp(email, password, name);
+      await auth.sendVerification?.(globalThis.document?.documentElement?.lang).catch((e) => console.warn('verification email', e));
+      return u;
+    },
     async signIn(email, password) { const u = await auth.signIn(email, password); await S.claimInvites().catch((e) => console.warn('claimInvites', e)); return u; },
+    // Email confirmation (once per account, before creating a business or joining one as staff).
+    needsVerification() { const u = user(); return !!u && u.emailVerified === false; },
+    async resendVerification() { await auth.sendVerification(globalThis.document?.documentElement?.lang); },
+    async checkVerified() {
+      const u = await auth.reload();
+      if (u?.emailVerified) await S.claimInvites().catch((e) => console.warn('claimInvites', e));
+      return !!u?.emailVerified;
+    },
     async signOut() { roleCache.clear(); await auth.signOut(); },
 
     async myMemberships() {
@@ -85,7 +97,7 @@ export function createService({ db, auth, mode }) {
       return out;
     },
     async claimInvites() {
-      const u = user(); if (!u?.email) return;
+      const u = user(); if (!u?.email || u.emailVerified === false) return;
       const inv = await db.listGroup('invites', { where: [['email', '==', u.email]] });
       for (const i of inv) {
         await db.batch([
@@ -101,6 +113,7 @@ export function createService({ db, auth, mode }) {
     async createBusiness(input) {
       const u = user(); if (!u) fail('unauthenticated');
       if (await S.isPlatformAdmin()) fail('admin-no-business');
+      if (u.emailVerified === false) fail('email-not-verified');
       if (!input.termsAccepted) fail('terms-required');
       const name = L.clampStr(input.name, 60); if (!name) fail('invalid-name');
       const platform = await db.get('platform/settings');
