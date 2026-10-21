@@ -57,6 +57,7 @@ export async function seedDemo(db, auth) {
   const rewardState = Object.fromEntries(rewards.map((r) => [r.id, 0]));
   const stats = { txns: 0, revenue: 0, points: 0, redeemed: 0 };
 
+  const bdayIn = (days, year) => { const d = new Date(NOW + days * DAY); return `${year}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const customers = [];
   for (let i = 0; i < 250; i++) {
     const roll = R();
@@ -68,7 +69,8 @@ export async function seedDemo(db, auth) {
       firstName: isMaya ? 'مايا' : pick(FIRST), lastName: isMaya ? 'الحلبي' : pick(LAST),
       phone: isMaya ? '+963944123456' : '+9639' + between(30000000, 99999999),
       email: R() < 0.4 ? `member${i}@example.com` : '',
-      birthday: R() < 0.55 ? `${between(1970, 2006)}-${String(between(1, 12)).padStart(2, '0')}-${String(between(1, 28)).padStart(2, '0')}` : '',
+      // A few birthdays today and this week so the birthday filters have something to show.
+      birthday: ((bd) => (i % 83 === 5 ? bdayIn(0, 1990 + (i % 15)) : i % 97 === 11 ? bdayIn(3, 1995) : bd))(R() < 0.55 ? `${between(1970, 2006)}-${String(between(1, 12)).padStart(2, '0')}-${String(between(1, 28)).padStart(2, '0')}` : ''),
       gender: '', notes: isMaya ? 'Prefers thin crust. Usually orders for the office on Thursdays.' : '',
       marketingConsent: isMaya || R() < 0.7, preferredChannel: R() < 0.8 ? 'whatsapp' : 'sms', walletGoogle: i % 5 < 2,
       memberNumber: L.memberNumber(i + 1), cardToken: isMaya ? DEMO_CARD : L.cardToken(),

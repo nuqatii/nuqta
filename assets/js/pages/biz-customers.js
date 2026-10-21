@@ -1,5 +1,5 @@
 import { t, fmtNum, fmtMoney, fmtDate, ago, tierName, unitWord, rewardName, lang } from '../core/i18n.js';
-import { tierFor, autoSegment, AUTO_SEGMENTS, rewardIsLive, toLatinDigits, CHANNELS, isStampy, stampState } from '../core/loyalty.js';
+import { tierFor, autoSegment, AUTO_SEGMENTS, rewardIsLive, toLatinDigits, CHANNELS, isStampy, stampState, daysToBirthday, BIRTHDAY_FILTERS } from '../core/loyalty.js';
 import { esc, icon, $, avatar, fullName, modal, showError, toast, download, toCSV, waLink, copyText, confirmBox } from '../ui/ui.js';
 import { eventTitle, signed, EV_ICON, empty } from './biz-common.js';
 import { baseUrl } from '../config.js';
@@ -15,14 +15,20 @@ export default async function customers(ctx, el, { page, params }) {
   // Stamp cards: show progress toward the next reward plus a gift count for saved-up rewards.
   const ptsCell = (c) => { if (!isStampy(b.program)) return fmtNum(c.points); const s = stampState(b.program, liveRw, c.points); return `${fmtNum(s.progress)}/${fmtNum(s.goal)}${s.ready ? ` <span class="chip warn" style="padding:0 7px">${icon('gift')}${fmtNum(s.ready)}</span>` : ''}`; };
   const segOf = new Map(all.map((c) => [c.id, autoSegment(c, b.tiers)]));
+  // Birthdays: today, or within the next 7 days.
+  const bdayOf = new Map(all.map((c) => [c.id, daysToBirthday(c.birthday)]));
+  const inBday = (c, f) => { const d = bdayOf.get(c.id); return d !== null && d <= BIRTHDAY_FILTERS[f]; };
+  const bdayCount = (f) => all.filter((c) => inBday(c, f)).length;
+  const isBdayView = () => st.seg in BIRTHDAY_FILTERS;
   const st = { q: '', seg: new URLSearchParams(location.hash.split('?')[1] || '').get('seg') || 'all', sort: 'recent', limit: 50 };
 
   function filtered() {
     const q = toLatinDigits(st.q).trim().toLowerCase(); const digits = q.replace(/\D/g, '').replace(/^0/, '');
-    let rows = all.filter((c) => st.seg === 'all' || segOf.get(c.id) === st.seg);
+    let rows = all.filter((c) => st.seg === 'all' || (isBdayView() ? inBday(c, st.seg) : segOf.get(c.id) === st.seg));
     if (q) rows = rows.filter((c) => fullName(c).toLowerCase().includes(q) || (digits.length >= 2 && (c.phone.includes(digits) || c.memberNumber.includes(digits))) || (c.email || '').includes(q) || c.id === q);
     const by = { recent: (c) => -(c.joinedAt || 0), points: (c) => -(c.points || 0), spend: (c) => -(c.spend || 0), visit: (c) => -(c.lastVisitAt || 0), name: null }[st.sort];
-    rows = [...rows].sort(by ? (a, c) => by(a) - by(c) : (a, c) => fullName(a).localeCompare(fullName(c), lang));
+    rows = isBdayView() && st.sort === 'recent' ? [...rows].sort((a, c) => bdayOf.get(a.id) - bdayOf.get(c.id))
+      : [...rows].sort(by ? (a, c) => by(a) - by(c) : (a, c) => fullName(a).localeCompare(fullName(c), lang));
     return rows;
   }
   const counts = Object.fromEntries(AUTO_SEGMENTS.map((s) => [s, 0])); for (const s of segOf.values()) counts[s]++;
@@ -36,22 +42,33 @@ export default async function customers(ctx, el, { page, params }) {
     <div class="row wrap"><div style="position:relative;flex:1;min-width:240px"><input class="input" id="q" placeholder="${t('cu_search_ph')}" style="padding-inline-start:40px">
       <span style="position:absolute;inset-inline-start:12px;top:12px;color:var(--faint);width:20px;height:20px">${icon('search')}</span></div>
       <select class="input" id="sort" style="width:auto">${['recent', 'visit', 'points', 'spend', 'name'].map((s) => `<option value="${s}">${{ recent: t('joined'), visit: t('last_visit'), points: t('points'), spend: t('total_spend'), name: t('first_name') }[s]}</option>`).join('')}</select></div>
-    <div class="row wrap" role="group">${['all', ...AUTO_SEGMENTS].map((s) => `<button class="chip ${s !== 'all' ? 'dot' : ''}" style="--c:${SEG_COLOR[s] || ''}" data-seg="${s}" aria-pressed="${st.seg === s}">${s === 'all' ? t('all') : t('seg_' + s)} · ${fmtNum(s === 'all' ? all.length : counts[s])}</button>`).join('')}</div>
+    <div class="row wrap" role="group">${['all', ...AUTO_SEGMENTS].map((s) => `<button class="chip ${s !== 'all' ? 'dot' : ''}" style="--c:${SEG_COLOR[s] || ''}" data-seg="${s}" aria-pressed="${st.seg === s}">${s === 'all' ? t('all') : t('seg_' + s)} · ${fmtNum(s === 'all' ? all.length : counts[s])}</button>`).join('')}
+      ${Object.keys(BIRTHDAY_FILTERS).map((s) => `<button class="chip bday" data-seg="${s}" aria-pressed="${st.seg === s}">${icon('cake')}${t(s)} · ${fmtNum(bdayCount(s))}</button>`).join('')}</div>
   </div>
   <section class="panel"><div class="table-wrap" id="tbl"></div></section>`;
 
   function drawTable() {
     const rows = filtered();
     const box = $('#tbl', el);
+    const bv = isBdayView();
+    // In the birthday views: when it is, plus one-tap call / WhatsApp to wish them a happy birthday.
+    const bdayCell = (c) => { const d = bdayOf.get(c.id); const [, mo, da] = c.birthday.split('-').map(Number);
+      const when = d === 0 ? `<span class="chip bday on">${icon('cake')}${t('bd_today')}</span>` : `<span class="chip">${d === 1 ? t('bd_tomorrow') : t('bd_in', { n: fmtNum(d) })} · ${new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SY-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(2000, mo - 1, da))}</span>`;
+      const msg = t('bd_wa', { name: c.firstName, biz: b.name });
+      return `<td><div class="row" style="gap:6px;flex-wrap:nowrap">${when}
+        <a class="btn sm icon" href="tel:${esc(c.phone)}" data-stop aria-label="${t('bd_call')}" title="${t('bd_call')}">${icon('phone')}</a>
+        <a class="btn sm icon wa" href="${esc(waLink(c.phone, msg))}" target="_blank" rel="noopener" data-stop aria-label="${t('bd_whatsapp')}" title="${t('bd_whatsapp')}">${icon('whatsapp')}</a></div></td>`; };
     if (!all.length) { box.innerHTML = empty(t('cu_empty'), `<a class="btn primary" href="#/qr">${icon('qr')}${t('nav_qr')}</a>`); return; }
-    box.innerHTML = `<table class="tbl"><thead><tr><th>${t('first_name')}</th><th class="hide-sm">${t('tier')}</th><th class="r">${t('points')}</th><th class="r hide-sm">${t('visits')}</th><th class="hide-sm">${t('last_visit')}</th><th class="r hide-sm">${t('total_spend')}</th></tr></thead>
+    if (bv && !rows.length && !st.q) { box.innerHTML = empty(t(st.seg === 'bday_today' ? 'bd_none_today' : 'bd_none_week'), `<p class="small muted" style="max-width:420px;margin:0 auto">${t('bd_hint')}</p>`); return; }
+    box.innerHTML = `<table class="tbl"><thead><tr><th>${t('first_name')}</th>${bv ? `<th>${t('birthday')}</th>` : ''}<th class="hide-sm">${t('tier')}</th><th class="r">${t('points')}</th><th class="r hide-sm">${t('visits')}</th><th class="hide-sm">${t('last_visit')}</th><th class="r hide-sm">${t('total_spend')}</th></tr></thead>
       <tbody>${rows.slice(0, st.limit).map((c) => { const tr = tierFor(b.tiers, c.lifetimePoints); const sg = segOf.get(c.id); return `<tr data-id="${c.id}" tabindex="0">
         <td><div class="row">${avatar(c)}<div style="min-width:0"><div style="font-weight:500">${esc(fullName(c))}</div><div class="small muted"><span class="ltr">${esc(c.phone)}</span> <span class="chip dot" style="--c:${SEG_COLOR[sg]};padding:0 7px;font-size:.72rem">${t('seg_' + sg)}</span></div></div></div></td>
-        <td class="hide-sm">${b.tiers.length > 1 ? `<span class="chip dot" style="--c:${esc(tr?.color)}">${esc(tierName(tr))}</span>` : ''}</td>
+        ${bv ? bdayCell(c) : ''}<td class="hide-sm">${b.tiers.length > 1 ? `<span class="chip dot" style="--c:${esc(tr?.color)}">${esc(tierName(tr))}</span>` : ''}</td>
         <td class="r pts">${ptsCell(c)}</td><td class="r num hide-sm">${fmtNum(c.visits)}</td>
         <td class="hide-sm small muted">${c.lastVisitAt ? ago(c.lastVisitAt) : '—'}</td><td class="r num hide-sm">${fmtMoney(c.spend, b.currency)}</td></tr>`; }).join('')}</tbody></table>
       ${rows.length > st.limit ? `<div style="padding:14px;text-align:center"><button class="btn" id="more">${t('view_all')} (${fmtNum(rows.length)})</button></div>` : ''}
       ${!rows.length ? `<p class="muted" style="padding:24px;text-align:center">${t('co_no_match', { q: esc(st.q) })}</p>` : ''}`;
+    box.querySelectorAll('[data-stop]').forEach((a) => (a.onclick = (e) => e.stopPropagation()));
     box.querySelectorAll('tr[data-id]').forEach((tr) => { tr.onclick = () => ctx.nav('customer/' + tr.dataset.id); tr.onkeydown = (e) => { if (e.key === 'Enter') tr.click(); }; });
     $('#more', box)?.addEventListener('click', () => { st.limit += 200; drawTable(); });
   }

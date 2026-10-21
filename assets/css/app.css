@@ -599,3 +599,16 @@ a.wtile:active { transform: scale(.985); }
 .verify-box p { margin: 0; line-height: 1.7; }
 .verify-ic { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--brand-tint); color: var(--brand); }
 .verify-ic svg { width: 28px; height: 28px; }
+
+/* Birthdays */
+.chip.bday svg { width: 15px; height: 15px; }
+.chip.bday[aria-pressed="true"], .chip.bday.on { background: #FDE7EF; color: #B42357; border-color: #F6B8CC; }
+.bday-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 16px; border-radius: var(--r-md); background: #FDE7EF; color: #8E1C46; text-decoration: none; border: 1px solid #F6B8CC; }
+.bday-bar > svg { width: 26px; height: 26px; flex: none; }
+.bday-bar .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bday-bar small { color: #9C3A5D; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .chip.bday[aria-pressed="true"], :root:not([data-theme="light"]) .chip.bday.on { background: #4A1830; color: #FFC2D6; border-color: #7A2A4C; }
+  :root:not([data-theme="light"]) .bday-bar { background: #3A1426; color: #FFD3E1; border-color: #6A2443; }
+  :root:not([data-theme="light"]) .bday-bar small { color: #F2A9C2; }
+}

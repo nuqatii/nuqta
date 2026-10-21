@@ -1,7 +1,7 @@
 // Demo database: a document store with Firestore-like paths, persisted to localStorage.
 // Same interface as db-firestore.js so the service layer is written once.
 
-const KEY = 'nuqta_demo_db_v5';
+const KEY = 'nuqta_demo_db_v6';
 const INC = Symbol('inc');
 
 export function createMemoryDB() {

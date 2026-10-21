@@ -1,5 +1,5 @@
 import { t, fmtNum, fmtMoney, rewardName, tierName } from '../core/i18n.js';
-import { DAY, tierFor } from '../core/loyalty.js';
+import { DAY, tierFor, daysToBirthday } from '../core/loyalty.js';
 import { esc, icon, lineChart, barChart, compact, avatar, fullName } from '../ui/ui.js';
 import { activityItem, buckets, sum, pctDelta, deltaHtml, empty } from './biz-common.js';
 
@@ -30,12 +30,14 @@ export default async function dashboard(ctx, el) {
   const popular = [...rewards].sort((a, c) => (c.redeemedCount || 0) - (a.redeemedCount || 0)).slice(0, 5);
   const maxPop = Math.max(1, ...popular.map((r) => r.redeemedCount || 0));
   const first = (ctx.user.name || '').split(' ')[0];
+  const bdays = customers.filter((c) => daysToBirthday(c.birthday) === 0);
 
   el.innerHTML = `
   <div class="page-head">
     <div><h1>${t('dash_hello', { name: esc(first || '') })}</h1><p>${t('dash_today', { biz: esc(b.name) })}</p></div>
     <div class="actions">${ctx.can('checkout') ? `<a class="btn primary lg" href="#/checkout">${icon('scan')}${t('quick_checkout')}</a>` : ''}</div>
   </div>
+  ${bdays.length ? `<a class="bday-bar" href="#/customers?seg=bday_today">${icon('cake')}<span class="grow"><b>${bdays.length === 1 ? t('bd_dash_one', { name: esc(bdays[0].firstName) }) : t('bd_dash', { n: fmtNum(bdays.length) })}</b><small>${t('bd_dash_sub')}</small></span><span class="btn sm">${t('bd_see')}</span></a>` : ''}
   <section class="kpis" aria-label="Summary">
     <div class="kpi"><div class="l">${t('k_customers')}</div><div class="v">${fmtNum(customers.length)}</div></div>
     <div class="kpi"><div class="l">${t('k_new')}</div><div class="v">${fmtNum(newWeek)}</div>${deltaHtml(pctDelta(newWeek, newPrev), 'vs_prev_week')}</div>

@@ -96,6 +96,18 @@ export function stampGoal(program, rewards) {
 // how many full cards (rewards) are saved up. The stored balance is the plain total, so
 // redeeming one reward simply subtracts one card's worth.
 export const isStampy = (program) => program?.type === 'stamps' || program?.type === 'visits';
+// Days until the customer's next birthday (0 = today), or null without a birthday.
+// 29 Feb birthdays are celebrated on 28 Feb in other years.
+export function daysToBirthday(birthday, now = Date.now()) {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(birthday || ''); if (!m) return null;
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const on = (y) => { const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; const d = +m[1] === 2 && +m[2] === 29 && !leap ? 28 : +m[2]; return new Date(y, +m[1] - 1, d); };
+  let next = on(today.getFullYear());
+  if (next < today) next = on(today.getFullYear() + 1);
+  return Math.round((next - today) / DAY);
+}
+export const BIRTHDAY_FILTERS = { bday_today: 0, bday_week: 7 };
+
 export function stampState(program, rewards, points) {
   const goal = stampGoal(program, rewards);
   const p = Math.max(0, Math.floor(points || 0));

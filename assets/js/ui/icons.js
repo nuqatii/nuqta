@@ -48,4 +48,6 @@ export const ICON_PATHS = {
   minus: '<path d="M5 12h14"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  cake: '<path d="M3 21h18"/><path d="M5 21v-7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7"/><path d="M5 16.5c1.4 1 2.8 1 4.2 0s2.8-1 4.2 0 2.8 1 4.2 0"/><path d="M12 12V8.5"/><path d="M12 6c.9-.7 1.1-1.6 0-3-1.1 1.4-.9 2.3 0 3z"/>',
+  phone: '<path d="M5 3.5h3.5l2 5-2.6 1.6a11 11 0 0 0 6 6l1.6-2.6 5 2V19a2 2 0 0 1-2 2A17 17 0 0 1 3 5.5a2 2 0 0 1 2-2z"/>',
 };
