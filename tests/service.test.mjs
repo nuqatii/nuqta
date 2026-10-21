@@ -187,3 +187,12 @@ test('terms must be accepted; customers can ask for deletion and the owner remov
   // The same phone can join again as a fresh member.
   assert.ok((await S.joinProgram(b.slug, { firstName: 'Hiba', phone: '0966 111 222' })).cardToken);
 });
+
+test('birthdays: today, this week, next year and 29 February', () => {
+  const now = new Date(2026, 9, 22, 15, 0).getTime();   // 22 Oct 2026, afternoon
+  assert.equal(L.daysToBirthday('1990-10-22', now), 0);
+  assert.equal(L.daysToBirthday('1990-10-25', now), 3);
+  assert.equal(L.daysToBirthday('1990-10-21', now), 364);
+  assert.equal(L.daysToBirthday('', now), null);
+  assert.equal(L.daysToBirthday('2000-02-29', new Date(2027, 1, 28).getTime()), 0);   // not a leap year → 28 Feb
+});
