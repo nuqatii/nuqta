@@ -116,6 +116,8 @@ export function createService({ db, auth, mode }) {
       if (u.emailVerified === false) fail('email-not-verified');
       if (!input.termsAccepted) fail('terms-required');
       const name = L.clampStr(input.name, 60); if (!name) fail('invalid-name');
+      const ownerPhone = input.ownerPhone ? L.normalizePhone(input.ownerPhone) : '';
+      if (input.ownerPhone && !ownerPhone) fail('invalid-phone');
       const platform = await db.get('platform/settings');
       if (platform && platform.signupsOpen === false) fail('signups-closed');
       const trialDays = Math.min(365, Math.max(1, Number(platform?.trialDays) || L.DEFAULT_TRIAL_DAYS));
@@ -141,7 +143,7 @@ export function createService({ db, auth, mode }) {
         { op: 'set', path: P.sub(bid, 'members', u.uid), data: { uid: u.uid, email: u.email, name: u.name || '', role: 'owner', businessId: bid, createdAt: now() } },
         { op: 'set', path: P.slug(slug), data: { businessId: bid } },
         { op: 'set', path: P.stats(bid), data: { businessId: bid, statCustomers: 0, statTxns: 0, statRevenue: 0, statPoints: 0, statRedeemed: 0, lastActivityAt: now() } },
-        { op: 'set', path: P.sub(bid, 'private', 'settings'), data: { ownerEmail: u.email, limits: {} } },
+        { op: 'set', path: P.sub(bid, 'private', 'settings'), data: { ownerEmail: u.email, ownerName: L.clampStr(u.name, 60), ownerPhone, limits: {} } },
       ]);
       roleCache.set(bid + ':' + u.uid, 'owner');
       const ops = [];
@@ -551,6 +553,14 @@ export function createService({ db, auth, mode }) {
       return total;
     },
     async deleteLocation(bid, id) { await need(bid, 'locations'); if (id === 'main') fail('cannot-delete-main'); await db.remove(P.sub(bid, 'locations', id)); },
+    // The owner's own contact number, so the platform can reach them (owner + platform admin only).
+    async ownerContact(bid) { await need(bid, 'settings'); return (await db.get(P.sub(bid, 'private', 'settings'))) || {}; },
+    async updateOwnerContact(bid, { phone }) {
+      await need(bid, 'settings');
+      const ownerPhone = phone ? L.normalizePhone(phone) : ''; if (phone && !ownerPhone) fail('invalid-phone');
+      await db.set(P.sub(bid, 'private', 'settings'), { ownerPhone }, { merge: true });
+      return ownerPhone;
+    },
     async listAudit(bid) { await need(bid, 'settings'); return db.list(P.sub(bid, 'audit'), { orderBy: ['at', 'desc'], limit: 100 }); },
 
     // ── Platform admin (aggregates only — no customer PII) ─
@@ -559,6 +569,47 @@ export function createService({ db, auth, mode }) {
       const [biz, stats] = await Promise.all([db.list('businesses', { orderBy: ['createdAt', 'desc'] }), db.list('stats')]);
       const byId = new Map(stats.map((x) => [x.id, x]));
       return biz.map((b) => ({ ...(byId.get(b.id) || {}), ...b, id: b.id }));
+    },
+    // Owner contacts + the admin's own notes for every business, keyed by business id.
+    async adminDirectory() {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const biz = await db.list('businesses');
+      const [contacts, notes] = await Promise.all([
+        Promise.all(biz.map((b) => db.get(P.sub(b.id, 'private', 'settings')).catch(() => null))),
+        db.list('adminNotes').catch(() => []),
+      ]);
+      const noteBy = new Map(notes.map((n) => [n.id, n]));
+      return new Map(biz.map((b, i) => [b.id, { ...(contacts[i] || {}), note: noteBy.get(b.id) || null }]));
+    },
+    async adminBusinessDetails(bid) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const [b, stats, contact, note, payments, members] = await Promise.all([
+        db.get(P.biz(bid)), db.get(P.stats(bid)), db.get(P.sub(bid, 'private', 'settings')).catch(() => null),
+        db.get(`adminNotes/${bid}`).catch(() => null), db.list(P.sub(bid, 'payments'), { orderBy: ['at', 'desc'] }).catch(() => []),
+        db.list(P.sub(bid, 'members')).catch(() => []),
+      ]);
+      if (!b) fail('not-found');
+      return { ...(stats || {}), ...b, id: bid, contact: contact || {}, note: note || {}, payments, members };
+    },
+    async adminSetOwnerPhone(bid, phone) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const ownerPhone = phone ? L.normalizePhone(phone) : ''; if (phone && !ownerPhone) fail('invalid-phone');
+      await db.set(P.sub(bid, 'private', 'settings'), { ownerPhone }, { merge: true });
+      return ownerPhone;
+    },
+    async adminSaveNote(bid, text) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      await db.set(`adminNotes/${bid}`, { text: L.clampStr(text, 4000), updatedAt: now() }, { merge: true });
+    },
+    async adminMarkContacted(bid) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const t = now(); await db.set(`adminNotes/${bid}`, { contactedAt: t }, { merge: true }); return t;
+    },
+    // Every recorded payment across all businesses, newest first.
+    async adminListPayments() {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const rows = await db.listGroup('payments');
+      return rows.map((p) => ({ ...p, businessId: p.businessId || String(p._path || '').split('/')[1] })).sort((a, b) => (b.at || 0) - (a.at || 0));
     },
     async adminSetStatus(bid, status) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
@@ -580,7 +631,7 @@ export function createService({ db, auth, mode }) {
       const u = user();
       await db.batch([
         { op: 'update', path: P.biz(bid), data: { paidUntil, plan } },
-        { op: 'set', path: P.sub(bid, 'payments', db.newId()), data: { months, plan, amount: Number(amount) || 0, currency: currency || 'USD', method: L.clampStr(method, 40), note: L.clampStr(note, 200), periodEnd: paidUntil, at: now(), by: u.email } },
+        { op: 'set', path: P.sub(bid, 'payments', db.newId()), data: { businessId: bid, months, plan, amount: Number(amount) || 0, currency: currency || 'USD', method: L.clampStr(method, 40), note: L.clampStr(note, 200), periodEnd: paidUntil, at: now(), by: u.email } },
       ]);
       await audit(bid, 'admin.paid', { months, plan, amount, paidUntil });
       return paidUntil;

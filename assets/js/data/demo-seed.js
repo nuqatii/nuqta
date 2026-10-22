@@ -126,9 +126,9 @@ export async function seedDemo(db, auth) {
   });
   set(`stats/${bid}`, { businessId: bid, statCustomers: customers.length, statTxns: stats.txns, statRevenue: stats.revenue, statPoints: stats.points, statRedeemed: stats.redeemed, lastActivityAt: NOW - 3600000 });
   set('slugs/joespizza', { businessId: bid });
-  set(`businesses/${bid}/private/settings`, { ownerEmail: DEMO_ACCOUNTS.owner.email, limits: {} });
+  set(`businesses/${bid}/private/settings`, { ownerEmail: DEMO_ACCOUNTS.owner.email, ownerName: DEMO_ACCOUNTS.owner.name, ownerPhone: '+963944000111', limits: {} });
   for (const [i, ago] of [[0, 160], [1, 100], [2, 40]].map(([i, d]) => [i, d])) {
-    set(`businesses/${bid}/payments/pay${i}`, { months: 2, plan: 'starter', amount: 30, currency: 'USD', method: 'Sham Cash', note: '', periodEnd: NOW - ago * DAY + 60 * DAY, at: NOW - ago * DAY, by: DEMO_ACCOUNTS.admin.email });
+    set(`businesses/${bid}/payments/pay${i}`, { businessId: bid, months: 2, plan: 'starter', amount: 30, currency: 'USD', method: 'Sham Cash', note: '', periodEnd: NOW - ago * DAY + 60 * DAY, at: NOW - ago * DAY, by: DEMO_ACCOUNTS.admin.email });
   }
   const roles = { owner: 'owner', manager: 'manager', staff: 'staff', marketing: 'marketing' };
   for (const [k, role] of Object.entries(roles)) {
@@ -173,6 +173,7 @@ export async function seedDemo(db, auth) {
   });
   set(`stats/${ub}`, { businessId: ub, statCustomers: 18, statTxns: 77, statRevenue: 23100, statPoints: 77, statRedeemed: 4, lastActivityAt: NOW - 2 * DAY });
   set('slugs/urbancoffee', { businessId: ub });
+  set(`businesses/${ub}/private/settings`, { ownerEmail: DEMO_ACCOUNTS.other.email, ownerName: DEMO_ACCOUNTS.other.name, ownerPhone: '+963955000222', limits: {} });
   set(`businesses/${ub}/members/${DEMO_ACCOUNTS.other.uid}`, { uid: DEMO_ACCOUNTS.other.uid, email: DEMO_ACCOUNTS.other.email, name: DEMO_ACCOUNTS.other.name, role: 'owner', businessId: ub, createdAt: NOW - 40 * DAY });
   set(`businesses/${ub}/rewards/rw_coffee`, { name: 'Free coffee', nameAr: 'قهوة مجانية', cost: 9, value: 300, description: 'Your 10th coffee is on us', image: null, expiresAt: null, minPurchase: 0, usageLimit: 0, active: true, redeemedCount: 4, createdAt: NOW - 40 * DAY });
   set(`businesses/${ub}/locations/main`, { name: 'Shaalan', address: '', createdAt: NOW - 40 * DAY });
@@ -195,6 +196,20 @@ export async function seedDemo(db, auth) {
     status: 'active', plan: 'trial', ownerUid: 'u_rose', createdAt: NOW - 45 * DAY, trialEndsAt: NOW - 15 * DAY, paidUntil: null, memberSeq: 6, designVersion: 1,
   });
   set('slugs/rosesalon', { businessId: 'rosesalon01' });
+  set('businesses/rosesalon01/private/settings', { ownerEmail: 'rose@salon.demo', ownerName: 'Rana', ownerPhone: '', limits: {} });
+  set('adminNotes/rosesalon01', { text: 'Met Rana at the salon. Interested but wants to try with her regulars first.', updatedAt: NOW - 20 * DAY });
+
+  // A new sign-up that hasn't added any customers yet — shows up in the admin's follow-ups.
+  set('businesses/falafel01', {
+    name: 'بيت الفلافل', slug: 'falafelhouse', type: 'restaurant', currency: 'SYP', lang: 'ar', logo: null,
+    colors: { primary: '#2E7D32', secondary: '#F9A825', bg: '#2E7D32', text: '#FFFFFF' }, program: { type: 'stamps', per: 0, earn: 1, goal: 8, welcomeBonus: 0 },
+    tiers: [{ id: 'regular', name: 'Regular', nameAr: 'دائم', min: 0, color: '#2E7D32', benefits: '' }],
+    design: { style: 'gradient', layout: 'stamps', programName: '', programNameAr: '', cover: null, icon: 'leaf', codeFormat: 'qr' },
+    status: 'active', plan: 'trial', ownerUid: 'u_falafel', createdAt: NOW - 4 * DAY, trialEndsAt: NOW + 26 * DAY, paidUntil: null, memberSeq: 0, designVersion: 1,
+  });
+  set('slugs/falafelhouse', { businessId: 'falafel01' });
+  set('stats/falafel01', { businessId: 'falafel01', statCustomers: 0, statTxns: 0, statRevenue: 0, statPoints: 0, statRedeemed: 0, lastActivityAt: NOW - 4 * DAY });
+  set('businesses/falafel01/private/settings', { ownerEmail: 'abu.samer@falafel.demo', ownerName: 'أبو سامر', ownerPhone: '+963933000333', limits: {} });
   set('stats/rosesalon01', { businessId: 'rosesalon01', statCustomers: 6, statTxns: 14, statRevenue: 9800, statPoints: 14, statRedeemed: 0, lastActivityAt: NOW - 16 * DAY });
 
   await db.batch(ops);

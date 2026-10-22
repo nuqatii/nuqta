@@ -1,7 +1,7 @@
 // 7-step onboarding with a live card preview. Target: a non-technical owner done in < 10 minutes.
 import { t, lang, setLang, fmtMoney, unitWord, curLabel, appName, fmtDate } from '../core/i18n.js';
 import { accessState } from '../core/loyalty.js';
-import { BUSINESS_TYPES, PROGRAM_TYPES, defaultProgram, earnFor, defaultTiers } from '../core/loyalty.js';
+import { BUSINESS_TYPES, PROGRAM_TYPES, defaultProgram, earnFor, defaultTiers, normalizePhone } from '../core/loyalty.js';
 import { esc, icon, $, readImage, showError, qrSvg, copyText, CARD_ICONS, legalLink, toast } from '../ui/ui.js';
 import { CONFIG } from '../config.js';
 import { renderCard } from '../ui/card.js';
@@ -77,6 +77,7 @@ export default function onboarding(ctx, root, onDone) {
           <li><span class="grow"><span class="s">${t('pg_rule')}</span><span class="t">${t('pt_' + st.program.type)} — ${ruleText()}</span></span></li>
           <li><span class="grow"><span class="s">${t('ob_reward')}</span><span class="t">${esc(st.reward.name || '—')} · ${st.reward.cost} ${esc(unitWord(st.program, st.currency))}</span></span></li>
         </ul>
+        <label class="field" style="margin-top:8px"><span>${t('ob_owner_phone')}</span><input class="input" id="ophone" type="tel" inputmode="tel" dir="ltr" placeholder="09XX XXX XXX" value="${esc(st.ownerPhone || '')}" autocomplete="tel"><small>${t('ob_owner_phone_hint')}</small></label>
         <label class="check" style="margin-top:8px"><input type="checkbox" id="agree" ${st.agree ? 'checked' : ''}><span>${t('ob_terms', { terms: legalLink('terms'), privacy: legalLink('privacy') })}</span></label>`;
     }
   }
@@ -136,6 +137,7 @@ export default function onboarding(ctx, root, onDone) {
     root.querySelectorAll('[data-idea]').forEach((b) => (b.onclick = () => { const [n, c] = b.dataset.idea.split('|'); st.reward = { name: n, cost: +c }; render(); }));
     $('#rname')?.addEventListener('input', (e) => (st.reward.name = e.target.value));
     $('#agree')?.addEventListener('change', (e) => (st.agree = e.target.checked));
+    $('#ophone')?.addEventListener('input', (e) => (st.ownerPhone = e.target.value));
     $('#rcost')?.addEventListener('input', (e) => (st.reward.cost = Number(e.target.value) || 1));
   }
 
@@ -146,12 +148,14 @@ export default function onboarding(ctx, root, onDone) {
     }
     if (st.step === 6 && !st.reward.name.trim()) { const el = $('#rname'); el.setAttribute('aria-invalid', 'true'); return el.focus(); }
     if (st.step < TOTAL) { st.step++; return render(); }
+    const ph = $('#ophone');
+    if (ph && !normalizePhone(ph.value)) { ph.setAttribute('aria-invalid', 'true'); toast(t('err_invalid-phone'), 'bad'); return ph.focus(); }
     if (!$('#agree')?.checked) { toast(t('err_terms-required'), 'bad'); $('#agree')?.focus(); return; }
     if (st.busy) return; st.busy = true; $('#next').disabled = true;
     try {
       const b = await ctx.S.createBusiness({
         name: st.name, type: st.type, logo: st.logo, colors: st.colors, currency: st.currency, lang,
-        programType: st.program.type, program: st.program, termsAccepted: true, termsVersion: CONFIG.LEGAL.updated,
+        programType: st.program.type, program: st.program, termsAccepted: true, termsVersion: CONFIG.LEGAL.updated, ownerPhone: st.ownerPhone,
         design: { icon: st.icon, layout: st.program.type === 'stamps' || st.program.type === 'visits' ? 'stamps' : 'classic', programName: '', programNameAr: '' },
         firstReward: { name: st.reward.name, nameAr: lang === 'ar' ? st.reward.name : '', cost: st.reward.cost },
       });

@@ -1,7 +1,7 @@
 // Demo database: a document store with Firestore-like paths, persisted to localStorage.
 // Same interface as db-firestore.js so the service layer is written once.
 
-const KEY = 'nuqta_demo_db_v6';
+const KEY = 'nuqta_demo_db_v7';
 const INC = Symbol('inc');
 
 export function createMemoryDB() {
@@ -48,8 +48,8 @@ export function createMemoryDB() {
       }
     });
   }
-  function query(paths, { where, orderBy, limit } = {}) {
-    let rows = paths.map((p) => withId(p, docs[p])).filter((d) => match(d, where));
+  function query(paths, { where, orderBy, limit } = {}, withPath = false) {
+    let rows = paths.map((p) => (withPath ? { ...withId(p, docs[p]), _path: p } : withId(p, docs[p]))).filter((d) => match(d, where));
     if (orderBy) {
       const [f, dir = 'asc'] = orderBy;
       rows.sort((a, b) => ((a[f] ?? 0) > (b[f] ?? 0) ? 1 : (a[f] ?? 0) < (b[f] ?? 0) ? -1 : 0) * (dir === 'desc' ? -1 : 1));
@@ -78,7 +78,7 @@ export function createMemoryDB() {
     },
     async listGroup(colId, opts) {
       const paths = Object.keys(docs).filter((p) => { const s = p.split('/'); return s[s.length - 2] === colId; });
-      return query(paths, opts);
+      return query(paths, opts, true);
     },
     async count(col, opts) { return (await api.list(col, opts)).length; },
     async batch(ops) {

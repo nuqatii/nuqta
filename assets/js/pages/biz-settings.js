@@ -38,7 +38,7 @@ function qrPage(ctx, el) {
 
 async function settingsPage(ctx, el) {
   const b = ctx.biz;
-  const audit = await ctx.S.listAudit(ctx.bid).catch(() => []);
+  const [audit, contact] = await Promise.all([ctx.S.listAudit(ctx.bid).catch(() => []), ctx.S.ownerContact(ctx.bid).catch(() => ({}))]);
   el.innerHTML = `<div class="page-head"><div><h1>${t('se_title')}</h1></div></div>
   <div class="cols">
     <section class="panel c7"><div class="panel-h"><h2>${t('se_business')}</h2></div><div class="panel-b">
@@ -48,6 +48,11 @@ async function settingsPage(ctx, el) {
         <label class="field"><span>${t('se_currency')}</span><select class="input" name="currency">${['SYP', 'USD', 'LBP', 'EUR', 'CAD'].map((c) => `<option ${b.currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label></div>
         <label class="field"><span>${t('se_language')}</span><select class="input" name="lang"><option value="ar" ${b.lang === 'ar' ? 'selected' : ''}>العربية</option><option value="en" ${b.lang === 'en' ? 'selected' : ''}>English</option></select></label>
         <div><button class="btn primary" type="submit">${t('save')}</button></div>
+      </form>
+      <div class="hr" style="margin:18px 0"></div>
+      <form class="form" id="oc">
+        <label class="field"><span>${t('ob_owner_phone')}</span><div class="row"><input class="input" name="phone" type="tel" inputmode="tel" dir="ltr" placeholder="09XX XXX XXX" value="${esc(contact.ownerPhone || '')}" style="max-width:240px"><button class="btn" type="submit">${t('save')}</button></div>
+        <small>${t('ob_owner_phone_hint')}</small></label>
       </form>
       <div class="hr" style="margin:18px 0"></div>
       <ul class="list">
@@ -67,6 +72,10 @@ async function settingsPage(ctx, el) {
     if (!f.name.value.trim()) return f.name.focus();
     try { await ctx.S.updateBusiness(ctx.bid, { name: f.name.value.trim(), type: f.type.value, currency: f.currency.value, lang: f.lang.value }); toast(t('saved')); await ctx.reloadBiz(); }
     catch (err) { showError(err); }
+  };
+  $('#oc', el).onsubmit = async (e) => {
+    e.preventDefault();
+    try { const p = await ctx.S.updateOwnerContact(ctx.bid, { phone: e.target.phone.value }); e.target.phone.value = p; toast(t('saved')); } catch (err) { showError(err); }
   };
   $('#reset', el)?.addEventListener('click', async () => { await ctx.S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('login.html'); });
 }

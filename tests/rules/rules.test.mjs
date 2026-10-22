@@ -129,3 +129,15 @@ test('a customer can request deletion only for their own card; only the owner re
   await assertFails(getDocs(collection(as(CASHIER), `businesses/${BID}/deletionRequests`)));
   await assertSucceeds(getDocs(collection(as(JOE), `businesses/${BID}/deletionRequests`)));
 });
+
+test('platform admin: reads owner contacts, keeps private notes, lists all payments', async () => {
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), `businesses/${BID}/private/settings`), { ownerEmail: 'joe@x.test', ownerPhone: '+963944000111' }));
+  await assertSucceeds(getDoc(doc(as(ADMIN), `businesses/${BID}/private/settings`)));
+  await assertFails(getDoc(doc(as(CASHIER), `businesses/${BID}/private/settings`)));
+  await assertSucceeds(updateDoc(doc(as(ADMIN), `businesses/${BID}/private/settings`), { ownerPhone: '+963944000999' }));
+  await assertFails(updateDoc(doc(as(ADMIN), `businesses/${BID}/private/settings`), { ownerEmail: 'evil@x.test' }));
+  await assertSucceeds(setDoc(doc(as(ADMIN), 'adminNotes', BID), { text: 'hi' }));
+  await assertFails(getDoc(doc(as(JOE), 'adminNotes', BID)));
+  await assertSucceeds(getDocs(collectionGroup(as(ADMIN), 'payments')));
+  await assertFails(getDocs(collectionGroup(as(JOE), 'payments')));
+});

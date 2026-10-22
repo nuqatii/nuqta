@@ -612,3 +612,21 @@ a.wtile:active { transform: scale(.985); }
   :root:not([data-theme="light"]) .bday-bar { background: #3A1426; color: #FFD3E1; border-color: #6A2443; }
   :root:not([data-theme="light"]) .bday-bar small { color: #F2A9C2; }
 }
+
+/* Admin tabs */
+.ad-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; overflow-x: auto; scrollbar-width: none; }
+.ad-tabs a { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; font-weight: 500; }
+.ad-tabs a svg { width: 18px; height: 18px; }
+.ad-tabs a:hover { color: var(--ink); }
+.ad-tabs a[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); }
+.ad-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--saffron, #E8A33D); color: #fff; font-size: .72rem; display: inline-grid; place-items: center; }
+@media (max-width: 600px) {
+  .ad-tabs { gap: 0; }
+  .ad-tabs a { flex: 1; flex-direction: column; gap: 3px; padding: 8px 4px; font-size: .74rem; position: relative; white-space: normal; text-align: center; line-height: 1.2; }
+  .ad-tabs .ad-badge { position: absolute; top: 2px; inset-inline-end: 18%; min-width: 17px; height: 17px; font-size: .66rem; }
+}
+.biz-head { display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; align-items: center; }
+.kpis.mini { margin: 0; }
+.kpis.mini .v.small { font-size: 1rem; }
+.fu-list li { align-items: center; gap: 12px; }
+.fu-list li.done { opacity: .55; }
