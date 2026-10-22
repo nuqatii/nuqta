@@ -593,6 +593,15 @@ export function createService({ db, auth, mode }) {
       await db.update(P.biz(bid), { trialEndsAt }); await audit(bid, 'admin.trial', { days, trialEndsAt });
       return trialEndsAt;
     },
+    // Set the exact last day of the trial (earlier or later), e.g. to undo an extension made by mistake.
+    async adminSetTrialEnd(bid, ymd) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || '')); if (!m) fail('invalid');
+      const trialEndsAt = new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59).getTime();   // end of that day
+      const b = await db.get(P.biz(bid)); if (!b) fail('not-found');
+      await db.update(P.biz(bid), { trialEndsAt }); await audit(bid, 'admin.trial_set', { from: b.trialEndsAt || null, trialEndsAt });
+      return trialEndsAt;
+    },
     async listPayments(bid) {
       if (!(await S.isPlatformAdmin())) await need(bid, 'billing');
       return db.list(P.sub(bid, 'payments'), { orderBy: ['at', 'desc'] });

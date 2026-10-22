@@ -131,6 +131,8 @@ function faqDialog(items, i, save) {
   } }] });
 }
 
+const ymd = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
 // Record a payment and add months of paid time.
 function payDialog(b, settings) {
   const startPlan = PAID_PLANS.includes(b.plan) ? b.plan : 'starter';
@@ -168,6 +170,9 @@ async function moreDialog(b) {
     <form class="form" id="tf"><div class="field"><span>${t('ad_extend_trial')}</span><div class="row">
       <input class="input num" name="days" inputmode="numeric" value="14" style="max-width:110px" aria-label="${t('ad_days')}"><span class="small muted">${t('ad_days')}</span>
       <button class="btn" type="submit">${t('ad_extend_trial')}</button></div><small id="tnote"></small></div></form>
+    <form class="form" id="te"><div class="field"><span>${t('ad_trial_end')}</span><div class="row">
+      <input class="input" name="d" type="date" value="${ymd(b.trialEndsAt || (b.createdAt || Date.now()) + 30 * DAY)}" style="max-width:190px" aria-label="${t('ad_trial_end')}">
+      <button class="btn" type="submit">${t('ad_trial_set')}</button></div><small class="muted">${t('ad_trial_end_hint')}</small></div></form>
     <label class="field"><span>${t('ad_plan')}</span><select class="input" id="plan">${PLANS.map((p) => `<option value="${p}" ${b.plan === p ? 'selected' : ''}>${t('plan_' + p)}</option>`).join('')}</select></label>
     <div><h3 style="margin-bottom:6px">${t('ad_history')}</h3>${payments.length ? `<ul class="list">${payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + p.plan)} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')} · ${esc(p.by || '')}${p.note ? ' · ' + esc(p.note) : ''}</span></span><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div>
     <div class="hr"></div>
@@ -179,6 +184,12 @@ async function moreDialog(b) {
     const note = () => { const d = Number(f.days.value); $('#tnote', m).textContent = d > 0 ? t('ad_new_until', { d: fmtDate(extendTrial(b, d)) }) : ''; };
     f.days.oninput = note; note();
     f.onsubmit = async (e) => { e.preventDefault(); try { const until = await S.adminExtendTrial(b.id, f.days.value); toast(t('ad_trial_ok', { d: fmtDate(until) })); changed = true; close(); } catch (err) { showError(err); } };
+    $('#te', m).onsubmit = async (e) => {
+      e.preventDefault(); const d = e.target.d.value; if (!d) return;
+      const past = new Date(d + 'T23:59:59').getTime() < Date.now();
+      if (past && !(await confirmBox(t('ad_trial_set'), t('ad_trial_past'), t('ad_trial_set'), 'danger'))) return;
+      try { const until = await S.adminSetTrialEnd(b.id, d); toast(t('ad_trial_ok', { d: fmtDate(until) })); changed = true; close(); } catch (err) { showError(err); }
+    };
     $('#plan', m).onchange = async (e) => { try { await S.adminSetPlan(b.id, e.target.value); toast(t('saved')); changed = true; } catch (err) { showError(err); } };
     $('#st', m).onclick = async () => {
       const to = b.status === 'active' ? 'suspended' : 'active';

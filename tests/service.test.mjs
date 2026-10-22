@@ -196,3 +196,13 @@ test('birthdays: today, this week, next year and 29 February', () => {
   assert.equal(L.daysToBirthday('', now), null);
   assert.equal(L.daysToBirthday('2000-02-29', new Date(2027, 1, 28).getTime()), 0);   // not a leap year → 28 Feb
 });
+
+test('admin can set the trial end date earlier to undo a mistaken extension', async () => {
+  await S.signOut(); await S.signIn('admin@nuqta.demo', 'demo1234');
+  const [b] = await S.adminListBusinesses();
+  const d = new Date(Date.now() + 5 * L.DAY); const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const until = await S.adminSetTrialEnd(b.id, ymd);
+  assert.equal(new Date(until).getDate(), d.getDate());
+  assert.equal((await S.getBusiness(b.id)).trialEndsAt, until);
+  await assert.rejects(S.adminSetTrialEnd(b.id, 'soon'), /invalid/);
+});
