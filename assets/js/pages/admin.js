@@ -64,14 +64,47 @@ function followUps(rows, dir, now) {
   return { groups, recent, openCount: open.size };
 }
 
+// Data is loaded once and kept while the page is open, so switching tabs is instant.
+// Anything you change reloads it; it also refreshes quietly in the background after 2 minutes.
+const C = { details: new Map(), at: 0 };
+let isAdmin = null;
+const STALE = 2 * 60 * 1000;
+function reload() { for (const k of ['list', 'settings', 'dir', 'faq', 'pays']) delete C[k]; C.details.clear(); return render().catch(showError); }
+async function ensure(tab, biz) {
+  const jobs = [];
+  const want = (k, fn) => { if (C[k] === undefined) jobs.push(fn().then((v) => { C[k] = v; })); };
+  if (C.list === undefined) C.at = Date.now();
+  want('list', () => S.adminListBusinesses());
+  want('settings', () => S.adminSettings());
+  want('dir', () => S.adminDirectory().catch(() => new Map()));
+  if (tab === 'faq') want('faq', () => S.faq());
+  if (tab === 'payments') want('pays', () => S.adminListPayments());
+  if (biz && !C.details.has(biz)) jobs.push(S.adminBusinessDetails(biz).catch(() => null).then((v) => C.details.set(biz, v)));
+  if (jobs.length) await Promise.all(jobs);
+}
+let refreshing = false;
+function refreshInBackground() {
+  if (refreshing || Date.now() - C.at < STALE) return;
+  refreshing = true;
+  Promise.all([S.adminListBusinesses(), S.adminSettings(), S.adminDirectory().catch(() => C.dir)]).then(([l, st, d]) => {
+    C.list = l; C.settings = st; C.dir = d; delete C.pays; C.details.clear(); C.at = Date.now();
+    if (!document.querySelector('.modal-back') && !document.activeElement?.matches('input, textarea, select')) render().catch(() => {});
+  }).catch(() => {}).finally(() => { refreshing = false; });
+}
+
 async function render() {
   if (!S.auth.current()) return location.replace('login.html?next=admin.html');
-  if (!(await S.isPlatformAdmin())) { root.className = 'center-load'; root.innerHTML = `<div class="empty">${icon('shield')}<p>${t('ad_not_admin')}</p><a class="btn" href="app.html">${t('back')}</a></div>`; return; }
+  if (isAdmin === null) isAdmin = await S.isPlatformAdmin();
+  if (!isAdmin) { root.className = 'center-load'; root.innerHTML = `<div class="empty">${icon('shield')}<p>${t('ad_not_admin')}</p><a class="btn" href="app.html">${t('back')}</a></div>`; return; }
   const { tab, biz } = route();
-  const [list, settings, dir, faq, pays] = await Promise.all([
-    S.adminListBusinesses(), S.adminSettings(), S.adminDirectory().catch(() => new Map()),
-    tab === 'faq' ? S.faq() : null, tab === 'payments' ? S.adminListPayments() : null,
-  ]);
+  // Switch the tab straight away; show a spinner only if this tab's data isn't loaded yet.
+  const bar = root.querySelector('.ad-tabs');
+  if (bar) bar.querySelectorAll('a').forEach((a) => a.setAttribute('aria-selected', a.getAttribute('href') === '#' + tab));
+  const missing = C.list === undefined || (tab === 'faq' && !C.faq) || (tab === 'payments' && !C.pays) || (biz && !C.details.has(biz));
+  if (missing && bar) $('#tabBody').innerHTML = '<div class="center-load" style="min-height:240px"><div class="spinner"></div></div>';
+  await ensure(tab, biz);
+  if (route().tab !== tab || route().biz !== biz) return;   // the person already moved on
+  const { list, settings, dir, faq, pays } = C;
   const now = Date.now();
   const rows = list.map((b) => ({ ...b, acc: accessState(b, now) }));
   const byId = new Map(rows.map((r) => [r.id, r]));
@@ -82,7 +115,8 @@ async function render() {
   const tot = (k) => list.reduce((s, b) => s + (b[k] || 0), 0);
   const mrr = rows.filter((r) => r.acc.state === 'active').reduce((s, r) => s + (settings.prices?.[r.plan] || 0), 0);
   const fu = followUps(rows, dir, now);
-  const details = biz ? await S.adminBusinessDetails(biz).catch(() => null) : null;
+  const details = biz ? C.details.get(biz) : null;
+  setTimeout(refreshInBackground, 0);
 
   document.title = `${t('ad_title')} · ${details ? details.name : t('ad_tab_' + tab)}`;
   root.className = '';
@@ -262,9 +296,9 @@ async function render() {
     const b = { ...details, acc: accessState(details, now) };
     $('#dPay').onclick = () => payDialog(b, settings);
     $('#dMore').onclick = () => moreDialog(b);
-    $('#dPhone').onsubmit = async (e) => { e.preventDefault(); try { await S.adminSetOwnerPhone(b.id, e.target.phone.value); toast(t('saved')); render(); } catch (err) { showError(err); } };
-    $('#dNoteSave').onclick = async () => { try { await S.adminSaveNote(b.id, $('#dNote').value); toast(t('saved')); render(); } catch (err) { showError(err); } };
-    $('#dContacted').onclick = async () => { try { await S.adminMarkContacted(b.id); toast(t('saved')); render(); } catch (err) { showError(err); } };
+    $('#dPhone').onsubmit = async (e) => { e.preventDefault(); try { await S.adminSetOwnerPhone(b.id, e.target.phone.value); toast(t('saved')); reload(); } catch (err) { showError(err); } };
+    $('#dNoteSave').onclick = async () => { try { await S.adminSaveNote(b.id, $('#dNote').value); toast(t('saved')); reload(); } catch (err) { showError(err); } };
+    $('#dContacted').onclick = async () => { try { await S.adminMarkContacted(b.id); toast(t('saved')); reload(); } catch (err) { showError(err); } };
     return;
   }
   if (tab === 'businesses') {
@@ -279,7 +313,7 @@ async function render() {
     $('#adsort').onchange = (e) => { sort = e.target.value; drawTable(); };
   }
   if (tab === 'followups') root.querySelectorAll('[data-contacted]').forEach((x) => (x.onclick = async () => {
-    try { await S.adminMarkContacted(x.dataset.contacted); toast(t('saved')); render(); } catch (err) { showError(err); }
+    try { await S.adminMarkContacted(x.dataset.contacted); toast(t('saved')); reload(); } catch (err) { showError(err); }
   }));
   if (tab === 'payments') {
     const draw = () => { const box = $('#paytbl'); box.innerHTML = payTableHtml(); openRows(box); };
@@ -287,7 +321,7 @@ async function render() {
   }
   if (tab === 'faq') {
     const items = faq.items.map((x) => ({ q: { ...x.q }, a: { ...x.a } }));
-    const saveFaq = async (next) => { try { await S.adminSaveFaq(next); toast(t('saved')); render(); } catch (err) { showError(err); } };
+    const saveFaq = async (next) => { try { await S.adminSaveFaq(next); toast(t('saved')); reload(); } catch (err) { showError(err); } };
     const move = (i, d) => { const n = items.slice(); [n[i], n[i + d]] = [n[i + d], n[i]]; saveFaq(n); };
     root.querySelectorAll('[data-fup]').forEach((x) => (x.onclick = () => move(+x.dataset.fup, -1)));
     root.querySelectorAll('[data-fdn]').forEach((x) => (x.onclick = () => move(+x.dataset.fdn, 1)));
@@ -299,17 +333,17 @@ async function render() {
     $('#fqAdd').onclick = () => faqDialog(items, -1, saveFaq);
     if ($('#fqReset')) $('#fqReset').onclick = async () => {
       if (!(await confirmBox(t('fq_reset'), t('fq_reset_q'), t('fq_reset'), 'danger'))) return;
-      try { await S.adminResetFaq(); toast(t('saved')); render(); } catch (err) { showError(err); }
+      try { await S.adminResetFaq(); toast(t('saved')); reload(); } catch (err) { showError(err); }
     };
   }
   if (tab === 'settings') $('#ps').onsubmit = async (e) => {
     e.preventDefault();
-    try { await S.adminSaveSettings({ ...settings, signupsOpen: e.target.signupsOpen.checked, announcement: e.target.announcement.value }); toast(t('saved')); } catch (err) { showError(err); }
+    try { await S.adminSaveSettings({ ...settings, signupsOpen: e.target.signupsOpen.checked, announcement: e.target.announcement.value }); toast(t('saved')); delete C.settings; } catch (err) { showError(err); }
   };
   if (tab === 'billing') $('#bs').onsubmit = async (e) => {
     e.preventDefault(); const f = e.target;
     const prices = Object.fromEntries(PAID_PLANS.map((p) => [p, f['price_' + p].value]));
-    try { await S.adminSaveSettings({ ...settings, trialDays: f.trialDays.value, currency: f.currency.value.trim() || 'USD', prices, paymentInfo: f.paymentInfo.value, supportWhatsapp: f.supportWhatsapp.value.trim() }); toast(t('saved')); render(); }
+    try { await S.adminSaveSettings({ ...settings, trialDays: f.trialDays.value, currency: f.currency.value.trim() || 'USD', prices, paymentInfo: f.paymentInfo.value, supportWhatsapp: f.supportWhatsapp.value.trim() }); toast(t('saved')); reload(); }
     catch (err) { showError(err); }
   };
 }
@@ -361,7 +395,7 @@ function payDialog(b, settings) {
       const until = await S.adminMarkPaid(b.id, { months, plan: f.plan.value, amount: f.amount.value, currency: settings.currency, method: f.method.value, note: f.note.value });
       toast(t('ad_paid_ok', { d: fmtDate(until) })); return true;
     } }],
-  }).then((ok) => ok && render());
+  }).then((ok) => ok && reload());
 }
 
 // Extend trial, change plan label, see payments, pause/reactivate.
@@ -398,7 +432,7 @@ async function moreDialog(b) {
       try { await S.adminSetStatus(b.id, to); changed = true; close(); } catch (err) { showError(err); }
     };
   } });
-  if (changed) render();
+  if (changed) reload();
 }
 
 render().catch(showError);
