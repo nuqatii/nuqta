@@ -110,9 +110,11 @@ service cloud.firestore {
         allow create: if isAdmin();
         allow update, delete: if false;
       }
+      // Owner contact + settings. The platform admin can read it and correct the owner's phone number.
       match /private/{doc} {
-        allow read, update: if owner(bid);
-        allow create: if creatingOwnBusiness(bid) || owner(bid);
+        allow read: if owner(bid) || isAdmin();
+        allow update: if owner(bid) || (isAdmin() && onlyChanged(['ownerPhone']));
+        allow create: if creatingOwnBusiness(bid) || owner(bid) || (isAdmin() && request.resource.data.keys().hasOnly(['ownerPhone']));
         allow delete: if false;
       }
 
@@ -188,6 +190,11 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // The platform admin's private notes about each business (follow-ups, last contacted).
+    match /adminNotes/{bid} { allow read, write: if isAdmin(); }
+    // All payments across businesses, for the admin's Payments tab.
+    match /{path=**}/payments/{pid} { allow read: if isAdmin(); }
 
     // Collection-group lookups used at sign-in.
     match /{path=**}/members/{m} { allow read: if signedIn() && resource.data.uid == uid(); }
