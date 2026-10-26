@@ -11,11 +11,15 @@ export function createMemoryDB() {
   // (e.g. the customer card) can never overwrite newer data from the cashier tab.
   let timer = null; let dirty = false;
   const write = () => { if (!dirty) return; dirty = false; try { localStorage.setItem(KEY, JSON.stringify(docs)); } catch (e) { console.warn('Demo storage full', e); } };
-  const persist = () => { dirty = true; clearTimeout(timer); timer = setTimeout(write, 60); };
+  // Live listeners (like Firestore onSnapshot): told about every change, in this tab or another.
+  const watchers = new Set();
+  let notifyTimer = null;
+  const notify = () => { clearTimeout(notifyTimer); notifyTimer = setTimeout(() => watchers.forEach((w) => w.fire()), 30); };
+  const persist = () => { dirty = true; clearTimeout(timer); timer = setTimeout(write, 60); notify(); };
   const flush = () => { clearTimeout(timer); write(); };
   addEventListener('pagehide', flush);
   // Another tab (e.g. the cashier) wrote to the demo store — pick it up.
-  addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { docs = JSON.parse(e.newValue); } catch {} } });
+  addEventListener('storage', (e) => { if (e.key === KEY && e.newValue) { try { docs = JSON.parse(e.newValue); notify(); } catch {} } });
 
   const clone = (o) => (o == null ? null : JSON.parse(JSON.stringify(o)));
   const idOf = (path) => path.split('/').pop();
@@ -75,6 +79,11 @@ export function createMemoryDB() {
       const depth = col.split('/').length + 1;
       const paths = Object.keys(docs).filter((p) => p.startsWith(col + '/') && p.split('/').length === depth);
       return query(paths, opts);
+    },
+    watch(col, opts, onData) {
+      const w = { fire: () => api.list(col, opts).then(onData) };
+      watchers.add(w); w.fire();
+      return () => watchers.delete(w);
     },
     async listGroup(colId, opts) {
       const paths = Object.keys(docs).filter((p) => { const s = p.split('/'); return s[s.length - 2] === colId; });

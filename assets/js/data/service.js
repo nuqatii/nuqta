@@ -173,6 +173,9 @@ export function createService({ db, auth, mode }) {
 
     // ── Customers ──────────────────────────────────────────
     async listCustomers(bid) { await need(bid, 'customers'); return db.list(P.sub(bid, 'customers'), { orderBy: ['joinedAt', 'desc'] }); },
+    // Live versions for the business app: new members and purchases show up without refreshing.
+    async watchCustomers(bid, onData) { await need(bid, 'customers'); return db.watch(P.sub(bid, 'customers'), { orderBy: ['joinedAt', 'desc'] }, onData); },
+    async watchActivity(bid, since, onData) { await need(bid, 'transactions'); return db.watch(P.sub(bid, 'activity'), { where: [['at', '>=', since]], orderBy: ['at', 'desc'] }, onData); },
     async getCustomer(bid, cid) { await need(bid, 'customers'); return db.get(P.sub(bid, 'customers', cid)); },
     async findCustomer(bid, raw) {
       await need(bid, 'customers');

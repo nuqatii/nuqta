@@ -7,7 +7,8 @@ import { baseUrl } from '../config.js';
 export const cardUrl = (c) => `${baseUrl()}rewards.html?c=${c.cardToken}`;
 export const SEG_COLOR = { new: '#3B82F6', active: '#0F6E5C', loyal: '#7C3AED', vip: '#C9A227', at_risk: '#E8A33D', inactive: '#98A0AE' };
 
-export default async function customers(ctx, el, { page, params }) {
+const memo = {};   // list filters, kept when the list refreshes itself after a new member joins
+export default async function customers(ctx, el, { page, params, live }) {
   if (page === 'customer') return profile(ctx, el, params[0]);
   const b = ctx.biz;
   const [all, rwList] = await Promise.all([ctx.customers(), ctx.S.listRewards(ctx.bid)]);
@@ -20,7 +21,8 @@ export default async function customers(ctx, el, { page, params }) {
   const inBday = (c, f) => { const d = bdayOf.get(c.id); return d !== null && d <= BIRTHDAY_FILTERS[f]; };
   const bdayCount = (f) => all.filter((c) => inBday(c, f)).length;
   const isBdayView = () => st.seg in BIRTHDAY_FILTERS;
-  const st = { q: '', seg: new URLSearchParams(location.hash.split('?')[1] || '').get('seg') || 'all', sort: 'recent', limit: 50 };
+  const st = live && memo[ctx.bid] ? memo[ctx.bid] : { q: '', seg: new URLSearchParams(location.hash.split('?')[1] || '').get('seg') || 'all', sort: 'recent', limit: 50 };
+  memo[ctx.bid] = st;
 
   function filtered() {
     const q = toLatinDigits(st.q).trim().toLowerCase(); const digits = q.replace(/\D/g, '').replace(/^0/, '');
@@ -39,9 +41,9 @@ export default async function customers(ctx, el, { page, params }) {
   <div class="page-head"><div><h1>${t('cu_title')}</h1><p>${t('cu_count', { n: fmtNum(all.length) })}</p></div>
     <div class="actions"><button class="btn" id="csv">${icon('dl')}${t('export_csv')}</button><button class="btn primary" id="add">${icon('plus')}${t('cu_add')}</button></div></div>
   <div class="stack" style="gap:12px;margin-bottom:14px">
-    <div class="row wrap"><div style="position:relative;flex:1;min-width:240px"><input class="input" id="q" placeholder="${t('cu_search_ph')}" style="padding-inline-start:40px">
+    <div class="row wrap"><div style="position:relative;flex:1;min-width:240px"><input class="input" id="q" value="${esc(st.q)}" placeholder="${t('cu_search_ph')}" style="padding-inline-start:40px">
       <span style="position:absolute;inset-inline-start:12px;top:12px;color:var(--faint);width:20px;height:20px">${icon('search')}</span></div>
-      <select class="input" id="sort" style="width:auto">${['recent', 'visit', 'points', 'spend', 'name'].map((s) => `<option value="${s}">${{ recent: t('joined'), visit: t('last_visit'), points: t('points'), spend: t('total_spend'), name: t('first_name') }[s]}</option>`).join('')}</select></div>
+      <select class="input" id="sort" style="width:auto">${['recent', 'visit', 'points', 'spend', 'name'].map((s) => `<option value="${s}" ${st.sort === s ? 'selected' : ''}>${{ recent: t('joined'), visit: t('last_visit'), points: t('points'), spend: t('total_spend'), name: t('first_name') }[s]}</option>`).join('')}</select></div>
     <div class="row wrap" role="group">${['all', ...AUTO_SEGMENTS].map((s) => `<button class="chip ${s !== 'all' ? 'dot' : ''}" style="--c:${SEG_COLOR[s] || ''}" data-seg="${s}" aria-pressed="${st.seg === s}">${s === 'all' ? t('all') : t('seg_' + s)} · ${fmtNum(s === 'all' ? all.length : counts[s])}</button>`).join('')}
       ${Object.keys(BIRTHDAY_FILTERS).map((s) => `<button class="chip bday" data-seg="${s}" aria-pressed="${st.seg === s}">${icon('cake')}${t(s)} · ${fmtNum(bdayCount(s))}</button>`).join('')}</div>
   </div>

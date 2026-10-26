@@ -2,7 +2,7 @@
 import { getService } from '../data/index.js';
 import { t, setLang, lang, appName } from '../core/i18n.js';
 import { can, DAY, accessState } from '../core/loyalty.js';
-import { esc, icon, $, modal, showError, confirmBox } from '../ui/ui.js';
+import { esc, icon, $, modal, showError, confirmBox, toast } from '../ui/ui.js';
 
 const S = await getService();
 const root = document.getElementById('root');
@@ -46,21 +46,68 @@ const AREA = { customer: 'customers' };
 const ctx = {
   S, user: S.auth.current(), bid: null, role: null, biz: null, memberships: [], platform: null,
   access() { return accessState(this.biz); },
-  _customers: null, _activity: null,
-  async customers(force) { if (force || !this._customers) this._customers = await S.listCustomers(this.bid); return this._customers; },
+  _customers: null, _activity: null, _live: {}, _unsub: [],
+  // Customers and recent activity stay live (Firestore listeners), so a member who joins by QR code
+  // or a purchase by another cashier shows up on the dashboard without refreshing.
+  async customers(force) {
+    if (force) { this._customers = await S.listCustomers(this.bid); return this._customers; }
+    if (!this._live.c) this._live.c = liveList('c', (on) => S.watchCustomers(this.bid, on), (rows, prev) => { this._customers = rows; announceJoins(rows, prev); });
+    await this._live.c; return this._customers;
+  },
   async activity(force) {
     if (!can(this.role, 'transactions')) return [];
-    if (force || !this._activity) this._activity = await S.listActivity(this.bid, { since: Date.now() - 120 * DAY });
-    return this._activity;
+    if (force) { this._activity = await S.listActivity(this.bid, { since: Date.now() - 120 * DAY }); return this._activity; }
+    if (!this._live.a) this._live.a = liveList('a', (on) => S.watchActivity(this.bid, Date.now() - 120 * DAY, on), (rows) => { this._activity = rows; });
+    await this._live.a; return this._activity;
   },
-  invalidate() { this._customers = null; this._activity = null; },
+  invalidate() { this._unsub.forEach((u) => { try { u(); } catch {} }); this._unsub = []; this._live = {}; this._customers = null; this._activity = null; },
   // Patch a customer in the cache after checkout so the next lookup is instant.
-  patchCustomer(c) { if (!this._customers) return; const i = this._customers.findIndex((x) => x.id === c.id); if (i >= 0) this._customers[i] = { ...this._customers[i], ...c }; else this._customers.unshift(c); this._activity = null; },
+  patchCustomer(c) { if (!this._customers) return; const i = this._customers.findIndex((x) => x.id === c.id); if (i >= 0) this._customers[i] = { ...this._customers[i], ...c }; else this._customers.unshift(c); if (!this._live.a) this._activity = null; },
   // Refresh the business doc (name/logo may show in the chrome) and re-render the current page.
   async reloadBiz() { this.biz = await S.getBusiness(this.bid); renderChrome(); await route(); return this.biz; },
   nav(path) { location.hash = '#/' + path; },
   can(area) { return can(this.role, area); },
 };
+
+// Starts a live query. Resolves after the first result; later results update the cache and refresh the page.
+function liveList(key, start, apply) {
+  return new Promise((resolve, reject) => {
+    let first = true; let prev = null;
+    const bid = ctx.bid;
+    start((rows) => {
+      if (bid !== ctx.bid) return;
+      apply(rows, prev); prev = rows;
+      if (first) { first = false; resolve(); } else liveRefresh();
+    }).then((unsub) => { if (bid === ctx.bid) ctx._unsub.push(unsub); else unsub(); }).catch(reject);
+  });
+}
+// "Maya just joined" for members who sign up by QR code while the app is open.
+function announceJoins(rows, prev) {
+  if (!prev) return;
+  const known = new Set(prev.map((c) => c.id));
+  const fresh = rows.filter((c) => !known.has(c.id) && c.source === 'qr');
+  if (fresh.length === 1) toast(t('live_joined', { name: fresh[0].firstName }));
+  else if (fresh.length > 1) toast(t('live_joined_n', { n: fresh.length }));
+}
+// Re-draw the current page quietly (no spinner) when live data changes, on pages that only show data.
+const LIVE_PAGES = new Set(['dashboard', 'customers', 'customer', 'transactions', 'analytics', 'crm']);
+let liveTimer = null; let livePending = false;
+function liveRefresh() {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(async () => {
+    const id = currentId();
+    if (!LIVE_PAGES.has(id) || !PAGES[id]) return;
+    const el = $('#page');
+    const busy = document.querySelector('.modal-back') || (el && el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select'));
+    if (busy) { livePending = true; return; }
+    livePending = false;
+    const y = scrollY; const seq = routeSeq;
+    const [, ...params] = location.hash.replace(/^#\/?/, '').split('?')[0].split('/');
+    try { const mod = await PAGES[id](); if (seq !== routeSeq) return; el.onclick = null; el.oninput = null; await mod.default(ctx, el, { page: id, params, live: true }); scrollTo(0, y); } catch (e) { console.warn('live refresh', e); }
+  }, 700);
+}
+addEventListener('focusout', () => { if (livePending) setTimeout(() => { if (livePending) liveRefresh(); }, 300); });
+document.addEventListener('click', () => { if (livePending && !document.querySelector('.modal-back')) liveRefresh(); }, true);
 
 async function boot() {
   if (!ctx.user) return location.replace('login.html?next=app.html');

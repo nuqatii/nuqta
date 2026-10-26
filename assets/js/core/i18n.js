@@ -27,6 +27,7 @@ const en = {
   role_staff_d: 'Find customers and record purchases.', role_marketing_d: 'Segments, campaigns and analytics.',
   pick_business: 'Choose a business', new_business: 'Add another business', admin_console: 'Platform admin',
   // errors
+  live_joined: '{name} just joined your loyalty program 🎉', live_joined_n: '{n} new members just joined 🎉',
   bday_today: 'Birthday today', bday_week: 'Birthdays this week', bd_today: 'Today', bd_tomorrow: 'Tomorrow', bd_in: 'In {n} days',
   bd_call: 'Call', bd_whatsapp: 'WhatsApp', bd_wa: 'Happy birthday {name}! 🎉 Wishing you a wonderful year from all of us at {biz}.',
   bd_none_today: 'No birthdays today.', bd_none_week: 'No birthdays in the next 7 days.', bd_hint: 'Customers can add their birthday when they join or later from their card. You can also add it on the customer’s page.',
@@ -285,6 +286,7 @@ const ar = {
   role_owner_d: 'صلاحيات كاملة، بما فيها الفريق والإعدادات.', role_manager_d: 'الزبائن والصندوق والمكافآت والتحليلات.',
   role_staff_d: 'البحث عن الزبائن وتسجيل المشتريات.', role_marketing_d: 'الشرائح والحملات والتحليلات.',
   pick_business: 'اختر النشاط', new_business: 'إضافة نشاط آخر', admin_console: 'إدارة المنصة',
+  live_joined: 'انضم {name} الآن إلى برنامج الولاء 🎉', live_joined_n: 'انضم {n} أعضاء جدد الآن 🎉',
   bday_today: 'عيد ميلاد اليوم', bday_week: 'أعياد ميلاد هذا الأسبوع', bd_today: 'اليوم', bd_tomorrow: 'غداً', bd_in: 'بعد {n} أيام',
   bd_call: 'اتصال', bd_whatsapp: 'واتساب', bd_wa: 'كل عام وأنت بخير يا {name}! 🎉 نتمنى لك سنة جميلة، من كل فريق {biz}.',
   bd_none_today: 'لا توجد أعياد ميلاد اليوم.', bd_none_week: 'لا توجد أعياد ميلاد خلال الأيام السبعة القادمة.', bd_hint: 'يمكن للزبون إضافة تاريخ ميلاده عند الانضمام أو لاحقاً من بطاقته، ويمكنك أيضاً إضافته من صفحة الزبون.',

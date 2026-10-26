@@ -48,6 +48,10 @@ export function createFirestoreDB({ app, fs }) {
       const s = await fs.getDocs(buildQuery(fs.collection(db, col), opts));
       return s.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
+    // Live query: calls onData with the full result now and again after every change.
+    watch(col, opts, onData, onError) {
+      return fs.onSnapshot(buildQuery(fs.collection(db, col), opts), (s) => onData(s.docs.map((d) => ({ id: d.id, ...d.data() }))), onError || ((e) => console.warn('watch', col, e)));
+    },
     async listGroup(colId, opts) {
       const s = await fs.getDocs(buildQuery(fs.collectionGroup(db, colId), opts));
       return s.docs.map((d) => ({ id: d.id, _path: d.ref.path, ...d.data() }));
