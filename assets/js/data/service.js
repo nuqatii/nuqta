@@ -529,6 +529,10 @@ export function createService({ db, auth, mode }) {
     async listLocations(bid) { return db.list(P.sub(bid, 'locations')); },
     async saveLocation(bid, l) {
       await need(bid, 'locations'); const id = l.id || db.newId();
+      if (!l.id) {   // Basic includes up to 3 branches; a 4th needs Enterprise
+        const [b, existing] = await Promise.all([db.get(P.biz(bid)), db.list(P.sub(bid, 'locations'))]);
+        if (existing.length >= L.maxLocations(b)) fail('location-limit');
+      }
       const num = (v, max) => { const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max && n !== 0 ? Math.round(n * 1e6) / 1e6 : null; };
       await db.set(P.sub(bid, 'locations', id), { name: L.clampStr(l.name, 60), address: L.clampStr(l.address, 160), lat: num(l.lat, 90), lng: num(l.lng, 180), nearbyText: L.clampStr(l.nearbyText, 120), createdAt: l.createdAt || now() });
       walletPing('b=' + encodeURIComponent(bid));   // wallet passes pick up the new location
@@ -665,7 +669,7 @@ export function createService({ db, auth, mode }) {
       const s = (await db.get('platform/settings')) || {};
       return {
         signupsOpen: s.signupsOpen !== false, announcement: s.announcement || '', trialDays: s.trialDays || L.DEFAULT_TRIAL_DAYS,
-        currency: s.currency || 'USD', prices: { starter: 15, professional: 30, enterprise: 60, ...(s.prices || {}) },
+        currency: s.currency || 'USD', prices: { basic: s.prices?.basic ?? s.prices?.starter ?? 15, enterprise: s.prices?.enterprise ?? 30 },
         paymentInfo: s.paymentInfo || '', supportWhatsapp: s.supportWhatsapp || '',
       };
     },

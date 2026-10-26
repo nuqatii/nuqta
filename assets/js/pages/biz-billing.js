@@ -1,21 +1,23 @@
 // Owner's Subscription page: status, plans and prices, how to pay, payment history.
 import { t, fmtNum, fmtMoney, fmtDate, lang } from '../core/i18n.js';
-import { accessState, PAID_PLANS } from '../core/loyalty.js';
+import { accessState, PAID_PLANS, planKey, planForLocations, BASIC_MAX_LOCATIONS } from '../core/loyalty.js';
 import { esc, icon, waLink, legalLinks } from '../ui/ui.js';
 
 const CHIP = { trial: 'brand', active: 'ok', grace: 'warn', expired: 'bad', suspended: 'bad' };
 
 export default async function billing(ctx, el) {
   const b = ctx.biz;
-  const [platform, payments] = await Promise.all([
+  const [platform, payments, locs] = await Promise.all([
     ctx.platform ? Promise.resolve(ctx.platform) : ctx.S.platformSettings(),
     ctx.S.listPayments(ctx.bid).catch(() => []),
+    ctx.S.listLocations(ctx.bid).catch(() => []),
   ]);
+  const cur = planKey(b.plan); const fits = planForLocations(locs.length);
   const a = accessState(b);
   const locked = a.state === 'expired' || a.state === 'suspended';
-  const planName = (p) => t('plan_' + p);
+  const planName = (p) => t('plan_' + planKey(p));
   const price = (p) => fmtMoney(platform.prices?.[p] || 0, platform.currency);
-  const msg = t('bl_confirm_msg', { biz: b.name, plan: planName(b.plan === 'trial' ? 'starter' : b.plan), id: ctx.bid });
+  const msg = t('bl_confirm_msg', { biz: b.name, plan: planName(cur === 'trial' ? fits : cur), id: ctx.bid });
   const wa = platform.supportWhatsapp ? waLink(platform.supportWhatsapp, msg) : '';
 
   el.innerHTML = `
@@ -27,9 +29,11 @@ export default async function billing(ctx, el) {
   <div class="cols">
     <div class="c7 stack">
       <section class="panel"><div class="panel-h"><h2>${t('bl_plans')}</h2></div><div class="panel-b">
-        <div class="plan-grid">${PAID_PLANS.map((p) => `<div class="plan ${b.plan === p ? 'cur' : ''}">
-          <b>${planName(p)}</b><span class="price">${price(p)}</span><span class="small muted">${t('bl_per_month')}</span>
-          ${b.plan === p ? `<span class="chip brand" style="justify-self:start;margin-top:6px">${t('bl_current')}</span>` : ''}</div>`).join('')}</div>
+        <p class="small muted" style="margin:0 0 12px">${t('bl_all_features')}</p>
+        <div class="plan-grid">${PAID_PLANS.map((p) => `<div class="plan ${cur === p ? 'cur' : ''}">
+          <b>${planName(p)}</b><span class="small">${p === 'basic' ? t('bl_basic_d', { n: BASIC_MAX_LOCATIONS }) : t('bl_ent_d', { n: BASIC_MAX_LOCATIONS + 1 })}</span>
+          <span class="price">${p === 'enterprise' ? `<small class="muted" style="font-size:.6em">${t('bl_from')}</small> ` : ''}${price(p)}</span><span class="small muted">${t('bl_per_month')}</span>
+          ${cur === p ? `<span class="chip brand" style="justify-self:start;margin-top:6px">${t('bl_current')}</span>` : cur === 'trial' && fits === p ? `<span class="chip" style="justify-self:start;margin-top:6px">${t('bl_fits', { n: locs.length })}</span>` : ''}</div>`).join('')}</div>
       </div></section>
       <section class="panel"><div class="panel-h"><h2>${t('bl_how')}</h2></div><div class="panel-b stack" style="gap:12px">
         <div class="payinfo" dir="auto">${esc(platform.paymentInfo || t('bl_how_none'))}</div>

@@ -21,8 +21,14 @@ export const can = (role, area) => !!PERMISSIONS[role]?.includes(area);
 // ── Subscription ────────────────────────────────────────
 // A business runs on a free trial, then on paid time that the platform admin adds.
 // Keep GRACE_DAYS / DEFAULT_TRIAL_DAYS in sync with firestore.rules.
-export const PLANS = ['trial', 'starter', 'professional', 'enterprise'];
-export const PAID_PLANS = ['starter', 'professional', 'enterprise'];
+// Two plans with every feature: Basic for up to 3 branches, Enterprise for 4 or more.
+export const PLANS = ['trial', 'basic', 'enterprise'];
+export const PAID_PLANS = ['basic', 'enterprise'];
+export const BASIC_MAX_LOCATIONS = 3;
+// Older plan names (before 26 Oct 2026) count as Basic.
+export const planKey = (p) => (p === 'starter' || p === 'professional' ? 'basic' : PLANS.includes(p) ? p : 'trial');
+export const maxLocations = (b) => (planKey(b?.plan) === 'enterprise' ? Infinity : BASIC_MAX_LOCATIONS);
+export const planForLocations = (n) => (n > BASIC_MAX_LOCATIONS ? 'enterprise' : 'basic');
 export const GRACE_DAYS = 3;
 export const DEFAULT_TRIAL_DAYS = 30;
 export const trialEnd = (b) => b?.trialEndsAt ?? ((b?.createdAt || Date.now()) + DEFAULT_TRIAL_DAYS * DAY);

@@ -1,6 +1,8 @@
 // Locations and Team (staff accounts with roles).
 import { t, fmtDate, lang } from '../core/i18n.js';
-import { esc, icon, $, modal, showError, toast, confirmBox } from '../ui/ui.js';
+import { esc, icon, $, modal, showError, toast, confirmBox, waLink } from '../ui/ui.js';
+import { maxLocations, BASIC_MAX_LOCATIONS } from '../core/loyalty.js';
+import { CONFIG } from '../config.js';
 
 export default async function team(ctx, el, { page }) {
   return page === 'locations' ? locations(ctx, el) : staff(ctx, el);
@@ -16,9 +18,18 @@ export function parseCoords(text) {
 
 async function locations(ctx, el) {
   const list = await ctx.S.listLocations(ctx.bid);
+  const max = maxLocations(ctx.biz); const full = list.length >= max;
+  // Basic includes up to 3 branches. A 4th branch needs Enterprise: ask the platform on WhatsApp.
+  const upgrade = () => {
+    const wa = ctx.platform?.supportWhatsapp || CONFIG.LEGAL.whatsapp;
+    const msg = t('lc_upgrade_msg', { biz: ctx.biz.name, n: list.length + 1 });
+    modal({ title: t('lc_limit_t'), body: `<p>${t('lc_limit_d', { n: BASIC_MAX_LOCATIONS })}</p>`, actions: [{ label: t('close'), value: null },
+      ...(ctx.role === 'owner' && wa ? [{ label: t('lc_upgrade'), kind: 'primary', onClick: () => { open(waLink(wa, msg), '_blank', 'noopener'); return true; } }] : [])] });
+  };
   const has = (l) => Number.isFinite(l.lat) && Number.isFinite(l.lng) && l.lat !== null;
   el.innerHTML = `<div class="page-head"><div><h1>${t('lc_title')}</h1><p>${t('lc_hint')}</p></div><div class="actions"><button class="btn primary" id="add">${icon('plus')}${t('lc_add')}</button></div></div>
     <div class="note" style="margin-bottom:14px">${icon('pin')}<span>${t('lc_geo_note')}</span></div>
+    ${Number.isFinite(max) ? `<p class="small muted" style="margin:-4px 0 12px">${t('lc_count', { n: list.length, max })}${full ? ` · <a href="#" id="upg">${t('lc_more')}</a>` : ''}</p>` : ''}
     <section class="panel"><div class="panel-b"><ul class="list">${list.map((l) => `<li><span class="av sq" style="background:var(--brand-tint);color:var(--brand)">${icon('pin')}</span>
       <span class="grow"><span class="t">${esc(l.name)}</span><span class="s">${esc(l.address || '—')} · ${has(l) ? `<span style="color:var(--ok)">${t('lc_on_passes')}</span>` : `<span class="muted">${t('lc_no_pin')}</span>`}</span></span><button class="btn sm icon ghost" data-edit="${l.id}" aria-label="${t('edit')}">${icon('edit')}</button></li>`).join('')}</ul></div></section>`;
   const dlg = (l = {}) => modal({ title: l.id ? t('edit') : t('lc_add'), wide: true,
@@ -48,7 +59,8 @@ async function locations(ctx, el) {
         toast(t('saved')); return true;
       } },
     ] }).then((ok) => ok && locations(ctx, el));
-  $('#add', el).onclick = () => dlg();
+  $('#add', el).onclick = () => (full ? upgrade() : dlg());
+  $('#upg', el)?.addEventListener('click', (e) => { e.preventDefault(); upgrade(); });
   el.querySelectorAll('[data-edit]').forEach((x) => (x.onclick = () => dlg(list.find((l) => l.id === x.dataset.edit))));
 }
 

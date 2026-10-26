@@ -2,7 +2,7 @@
 // Aggregates only — never customer PII.
 import { getService } from '../data/index.js';
 import { t, setLang, lang, appName, fmtNum, fmtMoney, ago, fmtDate } from '../core/i18n.js';
-import { DAY, accessState, PLANS, PAID_PLANS, extendPaid, extendTrial } from '../core/loyalty.js';
+import { DAY, accessState, PLANS, PAID_PLANS, extendPaid, extendTrial, planKey } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, confirmBox, modal, waLink } from '../ui/ui.js';
 import { baseUrl } from '../config.js';
 import { faqText } from '../core/faq.js';
@@ -113,7 +113,7 @@ async function render() {
     || (f === 'locked' && ['grace', 'expired', 'suspended'].includes(r.acc.state));
   const count = (f) => rows.filter((r) => is(r, f)).length;
   const tot = (k) => list.reduce((s, b) => s + (b[k] || 0), 0);
-  const mrr = rows.filter((r) => r.acc.state === 'active').reduce((s, r) => s + (settings.prices?.[r.plan] || 0), 0);
+  const mrr = rows.filter((r) => r.acc.state === 'active').reduce((s, r) => s + (settings.prices?.[planKey(r.plan)] || 0), 0);
   const fu = followUps(rows, dir, now);
   const details = biz ? C.details.get(biz) : null;
   setTimeout(refreshInBackground, 0);
@@ -154,7 +154,7 @@ async function render() {
       <th>${t('col_business')}</th><th>${t('ad_sub')}</th><th class="hide-sm">${t('ad_plan')}</th><th class="r hide-sm">${t('k_customers')}</th><th class="r hide-sm">${t('ad_txns')}</th><th class="hide-sm">${t('ad_last_active')}</th><th>${t('ad_actions')}</th></tr></thead><tbody>
       ${shown.map((b) => `<tr data-open="${b.id}" tabindex="0"><td><div class="row">${logoOf(b)}<div><div style="font-weight:500">${esc(b.name)}</div><div class="small muted"><span class="ltr">/${esc(b.slug)}</span> · ${t('bt_' + b.type)} · ${fmtDate(b.createdAt)}</div></div></div></td>
         <td><span class="chip ${CHIP[b.acc.state]}">${t('st_' + b.acc.state)}</span><div class="small muted" style="margin-top:4px">${subLine(b)}</div></td>
-        <td class="hide-sm">${t('plan_' + (b.plan || 'trial'))}</td>
+        <td class="hide-sm">${t('plan_' + planKey(b.plan))}</td>
         <td class="r num hide-sm">${fmtNum(b.statCustomers || 0)}</td><td class="r num hide-sm">${fmtNum(b.statTxns || 0)}</td>
         <td class="hide-sm small muted">${ago(b.lastActivityAt)}</td>
         <td data-stop><div class="row" style="gap:6px;flex-wrap:nowrap">
@@ -201,7 +201,7 @@ async function render() {
     return `<table class="tbl"><thead><tr><th>${t('ad_pay_date')}</th><th>${t('col_business')}</th><th class="hide-sm">${t('ad_plan')}</th><th class="r">${t('ad_amount')}</th><th class="hide-sm">${t('ad_method')}</th><th class="hide-sm">${t('ad_note')}</th></tr></thead><tbody>
       ${xs.map((p) => { const b = byId.get(p.businessId); return `<tr data-open="${esc(p.businessId)}" tabindex="0"><td class="small">${fmtDate(p.at)}</td>
         <td><div style="font-weight:500">${esc(b?.name || p.businessId)}</div><div class="small muted">${t('ad_paid_until_short', { d: fmtDate(p.periodEnd) })}</div></td>
-        <td class="hide-sm">${t('plan_' + p.plan)} · ${t('bl_months', { n: p.months })}</td><td class="r num">${p.amount ? fmtMoney(p.amount, p.currency) : '—'}</td>
+        <td class="hide-sm">${t('plan_' + planKey(p.plan))} · ${t('bl_months', { n: p.months })}</td><td class="r num">${p.amount ? fmtMoney(p.amount, p.currency) : '—'}</td>
         <td class="hide-sm small">${esc(p.method || '')}</td><td class="hide-sm small muted">${esc(p.note || '')}</td></tr>`; }).join('')
       || `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">${q ? t('ad_no_match', { q: esc(paySearch) }) : t('ad_pay_none')}</td></tr>`}</tbody></table>`;
   }
@@ -220,7 +220,7 @@ async function render() {
     <div class="cols" style="margin-top:16px;align-items:start">
       <div class="c7 stack">
         <section class="panel"><div class="panel-h"><h2>${t('ad_sub')}</h2><span class="chip ${CHIP[b.acc.state]}">${t('st_' + b.acc.state)}</span></div><div class="panel-b"><ul class="list">
-          ${row(t('ad_plan'), t('plan_' + (b.plan || 'trial')))}
+          ${row(t('ad_plan'), t('plan_' + planKey(b.plan)))}
           ${b.acc.state !== 'suspended' ? row(b.acc.state === 'grace' ? t('ad_locks_on') : t('ad_ends_on'), `${fmtDate(b.acc.state === 'grace' ? b.acc.lockAt : b.acc.endsAt)} · ${t('bl_days_left', { n: b.acc.daysLeft })}`) : ''}
           ${row(t('ad_trial_end'), fmtDate(b.trialEndsAt))}
           ${b.paidUntil ? row(t('ad_paid_until'), fmtDate(b.paidUntil)) : ''}
@@ -231,7 +231,7 @@ async function render() {
           <div class="kpi"><div class="l">${t('ad_txns')}</div><div class="v">${fmtNum(b.statTxns || 0)}</div></div>
           <div class="kpi"><div class="l">${t('ad_redeemed')}</div><div class="v">${fmtNum(b.statRedeemed || 0)}</div></div>
           <div class="kpi"><div class="l">${t('ad_last_active')}</div><div class="v small">${ago(b.lastActivityAt)}</div></div></div></div></section>
-        <section class="panel"><div class="panel-h"><h2>${t('ad_history')}</h2></div><div class="panel-b">${details.payments.length ? `<ul class="list">${details.payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + p.plan)} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')}${p.note ? ' · ' + esc(p.note) : ''}</span></span><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div></section>
+        <section class="panel"><div class="panel-h"><h2>${t('ad_history')}</h2></div><div class="panel-b">${details.payments.length ? `<ul class="list">${details.payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + planKey(p.plan))} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')}${p.note ? ' · ' + esc(p.note) : ''}</span></span><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div></section>
       </div>
       <div class="c5 stack">
         <section class="panel"><div class="panel-h"><h2>${t('ad_owner')}</h2></div><div class="panel-b stack" style="gap:12px">
@@ -257,7 +257,7 @@ async function render() {
     return `<section class="panel"><div class="panel-h"><h2>${t('ad_billing')}</h2></div><div class="panel-b"><form class="form" id="bs" style="max-width:720px">
         <div class="grid2"><label class="field"><span>${t('ad_trial_days')}</span><input class="input num" name="trialDays" inputmode="numeric" value="${settings.trialDays}"></label>
         <label class="field"><span>${t('ad_currency')}</span><input class="input" name="currency" value="${esc(settings.currency)}" maxlength="6" dir="ltr"></label></div>
-        <div class="field"><span>${t('ad_prices')}</span><div class="grid2" style="grid-template-columns:repeat(3,1fr)">${PAID_PLANS.map((p) => `<label class="field"><span class="small">${t('plan_' + p)}</span><input class="input num" name="price_${p}" inputmode="decimal" value="${settings.prices?.[p] ?? ''}"></label>`).join('')}</div></div>
+        <div class="field"><span>${t('ad_prices')}</span><div class="grid2">${PAID_PLANS.map((p) => `<label class="field"><span class="small">${t('plan_' + p)} · ${p === 'basic' ? t('ad_basic_hint') : t('ad_ent_hint')}</span><input class="input num" name="price_${p}" inputmode="decimal" value="${settings.prices?.[p] ?? ''}"></label>`).join('')}</div></div>
         <label class="field"><span>${t('ad_payinfo')}</span><textarea class="input" name="paymentInfo" maxlength="1000" dir="auto" rows="4">${esc(settings.paymentInfo)}</textarea></label>
         <label class="field"><span>${t('ad_wa')}</span><input class="input" name="supportWhatsapp" value="${esc(settings.supportWhatsapp)}" dir="ltr" placeholder="+963 9XX XXX XXX"></label>
         <div><button class="btn primary" type="submit">${t('save')}</button></div></form></div></section>`;
@@ -370,7 +370,7 @@ const ymd = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${Strin
 
 // Record a payment and add months of paid time.
 function payDialog(b, settings) {
-  const startPlan = PAID_PLANS.includes(b.plan) ? b.plan : 'starter';
+  const startPlan = PAID_PLANS.includes(planKey(b.plan)) ? planKey(b.plan) : 'basic';
   const body = `<form class="form" id="pf">
     <div class="grid2"><label class="field"><span>${t('ad_plan')}</span><select class="input" name="plan">${PAID_PLANS.map((p) => `<option value="${p}" ${p === startPlan ? 'selected' : ''}>${t('plan_' + p)}</option>`).join('')}</select></label>
     <div class="field"><span>${t('ad_months')}</span><div class="seg" role="group">${[1, 3, 6, 12].map((m) => `<button type="button" data-m="${m}" aria-pressed="${m === 1}">${m}</button>`).join('')}</div></div></div>
@@ -408,8 +408,8 @@ async function moreDialog(b) {
     <form class="form" id="te"><div class="field"><span>${t('ad_trial_end')}</span><div class="row">
       <input class="input" name="d" type="date" value="${ymd(b.trialEndsAt || (b.createdAt || Date.now()) + 30 * DAY)}" style="max-width:190px" aria-label="${t('ad_trial_end')}">
       <button class="btn" type="submit">${t('ad_trial_set')}</button></div><small class="muted">${t('ad_trial_end_hint')}</small></div></form>
-    <label class="field"><span>${t('ad_plan')}</span><select class="input" id="plan">${PLANS.map((p) => `<option value="${p}" ${b.plan === p ? 'selected' : ''}>${t('plan_' + p)}</option>`).join('')}</select></label>
-    <div><h3 style="margin-bottom:6px">${t('ad_history')}</h3>${payments.length ? `<ul class="list">${payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + p.plan)} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')} · ${esc(p.by || '')}${p.note ? ' · ' + esc(p.note) : ''}</span></span><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div>
+    <label class="field"><span>${t('ad_plan')}</span><select class="input" id="plan">${PLANS.map((p) => `<option value="${p}" ${planKey(b.plan) === p ? 'selected' : ''}>${t('plan_' + p)}</option>`).join('')}</select></label>
+    <div><h3 style="margin-bottom:6px">${t('ad_history')}</h3>${payments.length ? `<ul class="list">${payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + planKey(p.plan))} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')} · ${esc(p.by || '')}${p.note ? ' · ' + esc(p.note) : ''}</span></span><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div>
     <div class="hr"></div>
     <button class="btn ${b.status === 'active' ? 'danger' : ''}" id="st">${b.status === 'active' ? t('ad_suspend') : t('ad_reactivate')}</button>
   </div>`;

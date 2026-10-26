@@ -35,7 +35,7 @@ export async function seedDemo(db, auth) {
 
   for (const a of Object.values(DEMO_ACCOUNTS)) await auth._createUser(a.email, a.password, a.name, a.uid);
   set(`platformAdmins/${DEMO_ACCOUNTS.admin.uid}`, { email: DEMO_ACCOUNTS.admin.email, at: NOW });
-  set('platform/settings', { signupsOpen: true, announcement: '', trialDays: 30, currency: 'USD', prices: { starter: 15, professional: 30, enterprise: 60 },
+  set('platform/settings', { signupsOpen: true, announcement: '', trialDays: 30, currency: 'USD', prices: { basic: 15, enterprise: 30 },
     paymentInfo: 'Sham Cash / Syriatel Cash: 0944 000 000\nBank transfer: ask us for the details\nOr pay in cash at our office in Mezzeh.', supportWhatsapp: '+963944000000' });
 
   // ── Joe's Pizza ───────────────────────────────────────
@@ -120,7 +120,7 @@ export async function seedDemo(db, auth) {
     colors: { primary: '#B3261E', secondary: '#F2B544', bg: '#B3261E', text: '#FFFFFF' },
     program, tiers,
     design: { style: 'gradient', layout: 'classic', programName: "Joe's Rewards", programNameAr: 'مكافآت جوز', cover: null, icon: 'pizza', codeFormat: 'qr' },
-    status: 'active', plan: 'starter', ownerUid: DEMO_ACCOUNTS.owner.uid, createdAt: NOW - 190 * DAY,
+    status: 'active', plan: 'basic', ownerUid: DEMO_ACCOUNTS.owner.uid, createdAt: NOW - 190 * DAY,
     trialEndsAt: NOW - 160 * DAY, paidUntil: NOW + 20 * DAY,
     memberSeq: customers.length, designVersion: 3,
   });

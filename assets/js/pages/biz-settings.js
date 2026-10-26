@@ -1,6 +1,6 @@
 // Settings and the Join QR / printable poster.
 import { t, fmtDate, ago, lang, unitWord, programName } from '../core/i18n.js';
-import { BUSINESS_TYPES } from '../core/loyalty.js';
+import { BUSINESS_TYPES, planKey } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, qrSvg, svgToPng, download, copyText, legalLinks } from '../ui/ui.js';
 import { baseUrl } from '../config.js';
 
@@ -57,7 +57,7 @@ async function settingsPage(ctx, el) {
       <div class="hr" style="margin:18px 0"></div>
       <ul class="list">
         <li><span class="grow"><span class="s">${t('se_join_link')}</span><span class="t ltr small">${esc(joinUrl(b))}</span></span><a class="btn sm" href="#/qr">${icon('qr')}</a></li>
-        <li><span class="grow"><span class="s">${t('se_plan')}</span><span class="t">${t('plan_' + (b.plan || 'free'))}</span></span></li>
+        <li><span class="grow"><span class="s">${t('se_plan')}</span><span class="t">${t('plan_' + planKey(b.plan))}</span></span></li>
         <li><span class="grow"><span class="s">ID</span><span class="t ltr small">${esc(ctx.bid)}</span></span></li>
       </ul>
       ${ctx.S.mode === 'demo' ? `<div class="hr" style="margin:18px 0"></div><div class="spread"><span class="muted small">${t('demo_banner')}</span><button class="btn danger" id="reset">${t('demo_reset')}</button></div>` : ''}
