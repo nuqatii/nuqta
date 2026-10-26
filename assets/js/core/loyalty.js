@@ -11,8 +11,8 @@ export const CAMPAIGN_CHANNELS = [...CHANNELS, 'gwallet'];
 
 // What each role may open. Mirrored server-side in firestore.rules.
 export const PERMISSIONS = {
-  owner:     ['billing', 'dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'designer', 'crm', 'campaigns', 'analytics', 'locations', 'staff', 'settings', 'qr'],
-  manager:   ['dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'crm', 'analytics', 'locations', 'qr'],
+  owner:     ['billing', 'dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'designer', 'crm', 'campaigns', 'analytics', 'reports', 'locations', 'staff', 'settings', 'qr'],
+  manager:   ['dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'crm', 'analytics', 'reports', 'locations', 'qr'],
   staff:     ['checkout', 'customers', 'transactions'],
   marketing: ['dashboard', 'customers', 'crm', 'campaigns', 'analytics', 'qr'],
 };

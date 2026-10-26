@@ -202,3 +202,31 @@ test('campaign messages: only signed-in marketers, only wallet holders, quota fa
   assert.equal(docs['businesses/urban01/campaigns/camp1'].status, 'sent');
   assert.equal(docs['businesses/urban01/campaigns/camp1'].walletSent, 1);
 });
+
+test('receipt email: platform admin only, goes to the owner, marks the payment as emailed', async () => {
+  copyFileSync('assets/js/core/receipt.js', 'functions/shared/receipt.js');
+  const receipt = await import('../functions/shared/receipt.js');
+  const { createMailer } = await import('../functions/email.js');
+  const docs = {
+    'platformAdmins/u_admin': { at: 1 },
+    'businesses/urban01': { ...BIZ, name: 'Urban Coffee', lang: 'en' },
+    'businesses/urban01/private/settings': { ownerEmail: 'karim@urban.test' },
+    'businesses/urban01/payments/pay1': { receiptNo: 'NQ-2026-0007', at: Date.UTC(2026, 9, 27), plan: 'basic', months: 3, amount: 45, currency: 'USD', method: 'Sham Cash', periodStart: Date.UTC(2026, 9, 27), periodEnd: Date.UTC(2027, 0, 27) },
+  };
+  const calls = [];
+  const fetchFn = async (url, opt) => { calls.push([url, JSON.parse(opt.body), opt.headers.Authorization]); return { ok: true, json: async () => ({ id: 'em_1' }) }; };
+  const mk = (key) => createHandler({ firestore: fakeFirestore(docs), google: fakeGoogle(), config: { ...CFG, APP_NAME: { en: 'nuqatii', ar: 'نقاطي' }, LEGAL: { whatsapp: '+963900000000' } }, L: null, verifyToken: async (t) => ({ uid: t }), mailer: createMailer({ apiKey: key, fetchFn }), receipt });
+  const post = async (h, auth, body) => { const res = fakeRes(); await h({ method: 'POST', path: '/gwallet/receipt', query: {}, body, headers: auth ? { authorization: 'Bearer ' + auth } : {} }, res); return res; };
+  const h = mk('re_test');
+  assert.equal((await post(h, null, { bid: 'urban01', pid: 'pay1' })).statusCode, 401);
+  assert.equal((await post(h, 'u_owner', { bid: 'urban01', pid: 'pay1' })).statusCode, 403);
+  assert.equal((await post(mk(''), 'u_admin', { bid: 'urban01', pid: 'pay1' })).statusCode, 503);   // no key yet
+  const ok = await post(h, 'u_admin', { bid: 'urban01', pid: 'pay1' });
+  assert.equal(ok.statusCode, 200); assert.equal(ok.body.to, 'karim@urban.test');
+  const [url, body, authz] = calls[0];
+  assert.equal(url, 'https://api.resend.com/emails'); assert.equal(authz, 'Bearer re_test');
+  assert.deepEqual(body.to, ['karim@urban.test']);
+  assert.match(body.subject, /NQ-2026-0007/);
+  assert.match(body.html, /Urban Coffee/); assert.match(body.html, /\$45/); assert.match(body.html, /Basic plan/);
+  assert.equal(docs['businesses/urban01/payments/pay1'].emailedTo, 'karim@urban.test');
+});

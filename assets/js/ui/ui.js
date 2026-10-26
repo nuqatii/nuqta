@@ -165,3 +165,13 @@ export async function copyText(s) { try { await navigator.clipboard.writeText(s)
 export const legalLink = (kind) => `<a href="${kind}.html?lang=${lang}" target="_blank" rel="noopener">${t(kind === 'terms' ? 'legal_terms' : 'legal_privacy')}</a>`;
 export const legalLinks = () => `<div class="legal-links">${legalLink('privacy')}${legalLink('terms')}</div>`;
 export const waLink = (phone, text) => `https://wa.me/${String(phone || '').replace(/[^\d]/g, '')}?text=${encodeURIComponent(text)}`;
+
+// Prints a document (receipt, report) on its own, without the app around it. Long documents flow onto more pages.
+export function printDoc(html) {
+  document.querySelectorAll('body > .print-doc').forEach((x) => x.remove());
+  const d = document.createElement('div'); d.className = 'print-doc'; d.innerHTML = html; document.body.append(d);
+  document.body.classList.add('printing-doc');
+  const done = () => { d.remove(); document.body.classList.remove('printing-doc'); removeEventListener('afterprint', done); };
+  addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 50);
+}

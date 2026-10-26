@@ -1,7 +1,9 @@
 // Owner's Subscription page: status, plans and prices, how to pay, payment history.
 import { t, fmtNum, fmtMoney, fmtDate, lang } from '../core/i18n.js';
 import { accessState, PAID_PLANS, planKey, planForLocations, BASIC_MAX_LOCATIONS } from '../core/loyalty.js';
-import { esc, icon, waLink, legalLinks } from '../ui/ui.js';
+import { esc, icon, waLink, legalLinks, showError } from '../ui/ui.js';
+import { showReceipt } from '../ui/receipt-view.js';
+import { receiptNumber } from '../core/receipt.js';
 
 const CHIP = { trial: 'brand', active: 'ok', grace: 'warn', expired: 'bad', suspended: 'bad' };
 
@@ -46,8 +48,11 @@ export default async function billing(ctx, el) {
     <section class="panel c5"><div class="panel-h"><h2>${t('bl_history')}</h2></div><div class="panel-b">
       ${payments.length ? `<ul class="list">${payments.map((p) => `<li><span class="av sq" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}</span>
         <span class="grow"><span class="t">${planName(p.plan)} · ${t('bl_months', { n: fmtNum(p.months) })}</span>
-        <span class="s">${fmtDate(p.at)}${p.method ? ' · ' + esc(p.method) : ''} · ${t('bl_until', { d: fmtDate(p.periodEnd) })}</span></span>
-        <span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="muted small">${t('bl_none')}</p>`}
+        <span class="s">${fmtDate(p.at)}${p.method ? ' · ' + esc(p.method) : ''} · ${t('bl_until', { d: fmtDate(p.periodEnd) })}</span>
+        <span class="s ltr" style="font-size:.75rem">${esc(receiptNumber(p))}</span></span>
+        <span class="stack" style="gap:6px;align-items:flex-end"><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span>
+        <button class="btn sm" data-rc="${esc(p.id)}">${icon('receipt')}${t('rc_view')}</button></span></li>`).join('')}</ul>` : `<p class="muted small">${t('bl_none')}</p>`}
     </div></section>
   </div>`;
+  el.querySelectorAll('[data-rc]').forEach((x) => (x.onclick = () => showReceipt(ctx.S, ctx.bid, x.dataset.rc).catch(showError)));
 }

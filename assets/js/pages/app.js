@@ -24,7 +24,7 @@ const NAV = [
     { id: 'customers', icon: 'users' }, { id: 'transactions', icon: 'list' },
   ] },
   { group: 'nav_group_grow', items: [
-    { id: 'rewards', icon: 'gift' }, { id: 'crm', icon: 'pie' }, { id: 'campaigns', icon: 'send' }, { id: 'analytics', icon: 'chart' }, { id: 'qr', icon: 'qr' },
+    { id: 'rewards', icon: 'gift' }, { id: 'crm', icon: 'pie' }, { id: 'campaigns', icon: 'send' }, { id: 'analytics', icon: 'chart' }, { id: 'reports', icon: 'receipt' }, { id: 'qr', icon: 'qr' },
   ] },
   { group: 'nav_group_setup', items: [
     { id: 'program', icon: 'sliders' }, { id: 'designer', icon: 'palette' }, { id: 'locations', icon: 'pin' }, { id: 'staff', icon: 'team' }, { id: 'settings', icon: 'gear' }, { id: 'billing', icon: 'card' },
@@ -36,7 +36,7 @@ const PAGES = {
   transactions: () => import('./biz-activity.js'), rewards: () => import('./biz-rewards.js'),
   program: () => import('./biz-program.js'), designer: () => import('./biz-designer.js'),
   crm: () => import('./biz-crm.js'), campaigns: () => import('./biz-campaigns.js'),
-  analytics: () => import('./biz-analytics.js'), locations: () => import('./biz-team.js'), staff: () => import('./biz-team.js'),
+  analytics: () => import('./biz-analytics.js'), reports: () => import('./biz-report.js'), locations: () => import('./biz-team.js'), staff: () => import('./biz-team.js'),
   settings: () => import('./biz-settings.js'), qr: () => import('./biz-settings.js'),
   billing: () => import('./biz-billing.js'),
 };

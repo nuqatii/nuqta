@@ -6,6 +6,8 @@ import { DAY, accessState, PLANS, PAID_PLANS, extendPaid, extendTrial, planKey }
 import { esc, icon, $, showError, toast, confirmBox, modal, waLink } from '../ui/ui.js';
 import { baseUrl } from '../config.js';
 import { faqText } from '../core/faq.js';
+import { showReceipt } from '../ui/receipt-view.js';
+import { receiptNumber } from '../core/receipt.js';
 
 const S = await getService();
 const root = document.getElementById('root');
@@ -231,7 +233,9 @@ async function render() {
           <div class="kpi"><div class="l">${t('ad_txns')}</div><div class="v">${fmtNum(b.statTxns || 0)}</div></div>
           <div class="kpi"><div class="l">${t('ad_redeemed')}</div><div class="v">${fmtNum(b.statRedeemed || 0)}</div></div>
           <div class="kpi"><div class="l">${t('ad_last_active')}</div><div class="v small">${ago(b.lastActivityAt)}</div></div></div></div></section>
-        <section class="panel"><div class="panel-h"><h2>${t('ad_history')}</h2></div><div class="panel-b">${details.payments.length ? `<ul class="list">${details.payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + planKey(p.plan))} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')}${p.note ? ' · ' + esc(p.note) : ''}</span></span><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div></section>
+        <section class="panel"><div class="panel-h"><h2>${t('ad_history')}</h2></div><div class="panel-b">${details.payments.length ? `<ul class="list">${details.payments.map((p) => `<li><span class="grow"><span class="t">${t('plan_' + planKey(p.plan))} · ${t('bl_months', { n: p.months })}</span><span class="s">${fmtDate(p.at)} · ${esc(p.method || '')}${p.note ? ' · ' + esc(p.note) : ''}</span>
+          <span class="s"><span class="ltr">${esc(receiptNumber(p))}</span> · ${p.emailedAt ? `<span style="color:var(--ok)">${t('rc_emailed_short', { d: ago(p.emailedAt) })}</span>` : `<span class="muted">${t('rc_not_emailed')}</span>`}</span></span>
+          <span class="stack" style="gap:6px;align-items:flex-end"><span class="num small">${p.amount ? fmtMoney(p.amount, p.currency) : ''}</span><button class="btn sm" data-rc="${esc(p.id)}">${icon('receipt')}${t('rc_view')}</button></span></li>`).join('')}</ul>` : `<p class="small muted">${t('bl_none')}</p>`}</div></section>
       </div>
       <div class="c5 stack">
         <section class="panel"><div class="panel-h"><h2>${t('ad_owner')}</h2></div><div class="panel-b stack" style="gap:12px">
@@ -298,6 +302,7 @@ async function render() {
     $('#dMore').onclick = () => moreDialog(b);
     $('#dPhone').onsubmit = async (e) => { e.preventDefault(); try { await S.adminSetOwnerPhone(b.id, e.target.phone.value); toast(t('saved')); reload(); } catch (err) { showError(err); } };
     $('#dNoteSave').onclick = async () => { try { await S.adminSaveNote(b.id, $('#dNote').value); toast(t('saved')); reload(); } catch (err) { showError(err); } };
+    root.querySelectorAll('[data-rc]').forEach((x) => (x.onclick = () => showReceipt(S, b.id, x.dataset.rc, { admin: true, onEmailed: () => { C.details.delete(b.id); } }).then(() => reload()).catch(showError)));
     $('#dContacted').onclick = async () => { try { await S.adminMarkContacted(b.id); toast(t('saved')); reload(); } catch (err) { showError(err); } };
     return;
   }
@@ -377,6 +382,7 @@ function payDialog(b, settings) {
     <div class="grid2"><label class="field"><span>${t('ad_amount')} (${esc(settings.currency)})</span><input class="input num" name="amount" inputmode="decimal"></label>
     <label class="field"><span>${t('ad_method')}</span><input class="input" name="method" list="methods" placeholder="Sham Cash"><datalist id="methods"><option>Sham Cash</option><option>Syriatel Cash</option><option>MTN Cash</option><option>${lang === 'ar' ? 'نقداً' : 'Cash'}</option><option>${lang === 'ar' ? 'تحويل بنكي' : 'Bank transfer'}</option></datalist></label></div>
     <label class="field"><span>${t('ad_note')} <span class="muted">(${t('optional')})</span></span><input class="input" name="note" maxlength="200"></label>
+    <label class="check"><input type="checkbox" name="sendrc" checked><span>${t('rc_send_now')}</span></label>
     <p class="note" id="until"></p></form>`;
   let months = 1;
   modal({ title: `${t('ad_mark_paid')} · ${b.name}`, body,
@@ -392,7 +398,11 @@ function payDialog(b, settings) {
     },
     actions: [{ label: t('cancel'), value: false }, { label: t('ad_mark_paid'), kind: 'primary', onClick: async (m) => {
       const f = $('#pf', m);
-      const until = await S.adminMarkPaid(b.id, { months, plan: f.plan.value, amount: f.amount.value, currency: settings.currency, method: f.method.value, note: f.note.value });
+      const r = await S.adminMarkPaid(b.id, { months, plan: f.plan.value, amount: f.amount.value, currency: settings.currency, method: f.method.value, note: f.note.value });
+      const until = r.paidUntil;
+      // Email the receipt to the owner straight away (best effort; it is always available in their dashboard).
+      if (f.sendrc?.checked) S.adminEmailReceipt(b.id, r.paymentId).then((x) => toast(t('rc_emailed', { to: x.to })))
+        .catch((e) => toast(e.code === 'email-off' || e.message === 'email-off' ? t('rc_email_off') : t('rc_email_failed'), 'bad'));
       toast(t('ad_paid_ok', { d: fmtDate(until) })); return true;
     } }],
   }).then((ok) => ok && reload());

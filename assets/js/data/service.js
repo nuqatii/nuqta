@@ -307,11 +307,12 @@ export function createService({ db, auth, mode }) {
         return { ...patch, _c: c };
       }).then(async ({ _c, ...r }) => { pingCard(_c); await audit(bid, 'points.adjust', { customerId, delta, note }); return r; });
     },
-    async listActivity(bid, { customerId, since, limit } = {}) {
+    async listActivity(bid, { customerId, since, until, limit } = {}) {
       await need(bid, 'transactions');
       const where = [];
       if (customerId) where.push(['customerId', '==', customerId]);
       if (since) where.push(['at', '>=', since]);
+      if (until) where.push(['at', '<', until]);
       return db.list(P.sub(bid, 'activity'), { where, orderBy: ['at', 'desc'], limit });
     },
 
@@ -612,6 +613,28 @@ export function createService({ db, auth, mode }) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
       const t = now(); await db.set(`adminNotes/${bid}`, { contactedAt: t }, { merge: true }); return t;
     },
+    // Emails the receipt for one payment to the business owner (server function; needs RESEND_API_KEY).
+    async adminEmailReceipt(bid, pid) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      if (mode === 'demo') {   // the demo can't send email: pretend it went to the owner's address
+        const c = (await db.get(P.sub(bid, 'private', 'settings'))) || {};
+        await db.update(P.sub(bid, 'payments', pid), { emailedAt: now(), emailedTo: c.ownerEmail || '' });
+        return { sent: true, to: c.ownerEmail || '' };
+      }
+      const base = walletBase(); if (!base) fail('email-off');
+      const token = await auth.idToken?.();
+      const r = await fetch(`${base}/receipt`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ bid, pid }) });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok) fail(out.error || 'email-failed');
+      return out;
+    },
+    // A payment and what the receipt needs (owner or platform admin).
+    async receiptData(bid, pid) {
+      if (!(await S.isPlatformAdmin())) await need(bid, 'billing');
+      const [p, b, c] = await Promise.all([db.get(P.sub(bid, 'payments', pid)), db.get(P.biz(bid)), db.get(P.sub(bid, 'private', 'settings')).catch(() => null)]);
+      if (!p || !b) fail('not-found');
+      return { p, biz: { id: bid, name: b.name, lang: b.lang }, ownerEmail: c?.ownerEmail || '' };
+    },
     // Every recorded payment across all businesses, newest first.
     async adminListPayments() {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
@@ -633,15 +656,22 @@ export function createService({ db, auth, mode }) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
       months = Math.trunc(Number(months)); if (!(months >= 1 && months <= 36)) fail('invalid');
       if (!L.PAID_PLANS.includes(plan)) fail('invalid');
-      const b = await db.get(P.biz(bid)); if (!b) fail('not-found');
-      const paidUntil = L.extendPaid(b, months);
-      const u = user();
-      await db.batch([
-        { op: 'update', path: P.biz(bid), data: { paidUntil, plan } },
-        { op: 'set', path: P.sub(bid, 'payments', db.newId()), data: { businessId: bid, months, plan, amount: Number(amount) || 0, currency: currency || 'USD', method: L.clampStr(method, 40), note: L.clampStr(note, 200), periodEnd: paidUntil, at: now(), by: u.email } },
-      ]);
-      await audit(bid, 'admin.paid', { months, plan, amount, paidUntil });
-      return paidUntil;
+      const u = user(); const pid = db.newId();
+      // Each payment gets a running receipt number (NQ-2026-0001), counted in platform/counters.
+      const res = await db.transaction(async (tx) => {
+        const b = await tx.get(P.biz(bid)); if (!b) fail('not-found');
+        const c = (await tx.get('platform/counters')) || {};
+        const seq = (Number(c.receiptSeq) || 0) + 1;
+        const paidUntil = L.extendPaid(b, months);
+        const start = new Date(paidUntil); start.setMonth(start.getMonth() - months);
+        const receiptNo = `NQ-${new Date().getFullYear()}-${String(seq).padStart(4, '0')}`;
+        tx.set('platform/counters', { receiptSeq: seq }, { merge: true });
+        tx.update(P.biz(bid), { paidUntil, plan });
+        tx.set(P.sub(bid, 'payments', pid), { businessId: bid, receiptNo, months, plan, amount: Number(amount) || 0, currency: currency || 'USD', method: L.clampStr(method, 40), note: L.clampStr(note, 200), periodStart: start.getTime(), periodEnd: paidUntil, at: now(), by: u.email });
+        return { paidUntil, receiptNo };
+      });
+      await audit(bid, 'admin.paid', { months, plan, amount, paidUntil: res.paidUntil, receiptNo: res.receiptNo });
+      return { ...res, paymentId: pid };
     },
     async adminExtendTrial(bid, days) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');

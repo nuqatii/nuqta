@@ -6,7 +6,7 @@ import { stampsPng } from './stamps.js';
 const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 
-export function createHandler({ firestore, google, config, apple = null, verifyToken = null, L = null }) {
+export function createHandler({ firestore, google, config, apple = null, verifyToken = null, L = null, mailer = null, receipt = null }) {
   const siteUrl = config.SITE_URL.endsWith('/') ? config.SITE_URL : config.SITE_URL + '/';
   const issuerId = () => String(config.GOOGLE_WALLET?.issuerId || '');
   const fnBase = () => `https://${config.GOOGLE_WALLET.region}-${config.FIREBASE.projectId}.cloudfunctions.net/gwallet`;
@@ -126,6 +126,33 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     res.status(200).json(out);
   }
 
+  // Emails a subscription receipt to the business owner. Platform admin only.
+  async function receiptEmail(req, res) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+    const tok = String(req.get?.('authorization') || req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
+    let uid = null;
+    try { uid = tok && verifyToken ? (await verifyToken(tok)).uid : null; } catch { uid = null; }
+    if (!uid) return res.status(401).json({ error: 'unauthenticated' });
+    if (!(await get(`platformAdmins/${uid}`))) return res.status(403).json({ error: 'permission-denied' });
+    if (!mailer?.enabled() || !receipt) return res.status(503).json({ error: 'email-off' });
+    const { bid, pid } = req.body || {};
+    if (!ID_RE.test(String(bid || '')) || !/^[A-Za-z0-9_-]{4,64}$/.test(String(pid || ''))) return res.status(400).json({ error: 'invalid' });
+    const [p, b, c] = await Promise.all([get(`businesses/${bid}/payments/${pid}`), get(`businesses/${bid}`), get(`businesses/${bid}/private/settings`)]);
+    if (!p || !b) return res.status(404).json({ error: 'not-found' });
+    let to = c?.ownerEmail || '';
+    if (!to) { const m = (await firestore.collection(`businesses/${bid}/members`).where('role', '==', 'owner').limit(1).get()).docs[0]; to = m?.data()?.email || ''; }
+    if (!to) return res.status(400).json({ error: 'no-owner-email' });
+    const lang = b.lang === 'en' ? 'en' : 'ar';
+    const issuer = { name: config.APP_NAME?.[lang] || 'nuqatii', site: siteUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''), whatsapp: config.LEGAL?.whatsapp || '', email: config.LEGAL?.email || '' };
+    const biz = { id: bid, name: b.name };
+    const link = `${siteUrl}app.html#/billing`;
+    const intro = lang === 'ar' ? `شكراً لك! استلمنا دفعتك. يمكنك عرض الإيصال وطباعته في أي وقت من صفحة الاشتراك:` : 'Thank you! We received your payment. You can view and print this receipt anytime on your Subscription page:';
+    const html = `<div style="background:#F4F5F9;padding:24px 12px"><p dir="${lang === 'ar' ? 'rtl' : 'ltr'}" style="font-family:Arial,sans-serif;color:#1B2559;max-width:640px;margin:0 auto 14px;font-size:14px">${intro} <a href="${link}">${link}</a></p>${receipt.receiptHtml({ p: { id: pid, ...p }, biz, ownerEmail: to, lang, issuer })}</div>`;
+    await mailer.send({ to, subject: receipt.receiptSubject({ p: { id: pid, ...p }, biz, lang, issuer }), html, text: `${intro} ${link}` });
+    await firestore.doc(`businesses/${bid}/payments/${pid}`).set({ emailedAt: Date.now(), emailedTo: to }, { merge: true });
+    return res.status(200).json({ sent: true, to });
+  }
+
   return async function handler(req, res) {
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -138,6 +165,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
       catch (e) { console.error('apple', e); return res.status(500).send(''); }
     }
     const route = path.replace(/\/+$/, '').split('/').pop();
+    if (route === 'receipt') { try { return await receiptEmail(req, res); } catch (e) { console.error('receipt', e); return res.status(500).json({ error: 'email-failed' }); } }
     if (route === 'message') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await message(req, res); } catch (e) { console.error('message', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'sync') { try { return await sync(req, res); } catch (e) { console.error('sync', e); return res.status(204).send(''); } }
     if (!issuerId()) return page(res, 503, 'Google Wallet is not set up yet.', 'محفظة Google غير مفعّلة بعد.');
