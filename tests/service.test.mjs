@@ -133,7 +133,7 @@ test('expired business is locked; admin payment unlocks it', async () => {
   const rose = list.find((b) => b.slug === 'rosesalon');
   assert.equal(L.accessState(rose).state, 'expired');
   await assert.rejects(S.joinProgram('rosesalon', { firstName: 'Nour', phone: '0933 222 111' }), /subscription-ended/);
-  await S.adminMarkPaid(rose.id, { months: 1, plan: 'starter', amount: 15, currency: 'USD', method: 'Cash' });
+  await S.adminMarkPaid(rose.id, { months: 1, plan: 'basic', amount: 15, currency: 'USD', method: 'Cash' });
   assert.equal(L.accessState(await S.getBusiness(rose.id)).state, 'active');
   const j = await S.joinProgram('rosesalon', { firstName: 'Nour', phone: '0933 222 111' });
   assert.ok(j.cardToken);
@@ -205,4 +205,16 @@ test('admin can set the trial end date earlier to undo a mistaken extension', as
   assert.equal(new Date(until).getDate(), d.getDate());
   assert.equal((await S.getBusiness(b.id)).trialEndsAt, until);
   await assert.rejects(S.adminSetTrialEnd(b.id, 'soon'), /invalid/);
+});
+
+test('Basic includes up to 3 branches; Enterprise has no limit; old plan names count as Basic', async () => {
+  assert.equal(L.planKey('starter'), 'basic'); assert.equal(L.planKey('professional'), 'basic'); assert.equal(L.planKey('enterprise'), 'enterprise');
+  assert.equal(L.maxLocations({ plan: 'trial' }), 3); assert.equal(L.maxLocations({ plan: 'enterprise' }), Infinity);
+  await S.signOut(); await S.signIn('owner@joespizza.demo', 'demo1234');
+  const [m] = await S.myMemberships(); const bid = m.businessId;
+  const have = (await S.listLocations(bid)).length;
+  for (let i = have; i < 3; i++) await S.saveLocation(bid, { name: 'Branch ' + i });
+  await assert.rejects(S.saveLocation(bid, { name: 'One too many' }), /location-limit/);
+  const first = (await S.listLocations(bid))[0];
+  await S.saveLocation(bid, { ...first, name: 'Renamed' });   // editing an existing branch is always fine
 });
