@@ -75,10 +75,10 @@ service cloud.firestore {
         && request.resource.data.trialEndsAt is number && request.resource.data.trialEndsAt <= nowMs() + maxTrialMs()
         && (!exists(settingsPath()) || get(settingsPath()).data.get('signupsOpen', true) != false);
       allow update: if
-           (owner(bid) && onlyChanged(['name', 'type', 'currency', 'lang', 'logo', 'colors', 'program', 'design', 'tiers', 'designVersion']))
-        || (manages(bid) && onlyChanged(['program', 'tiers', 'designVersion']))
+           (owner(bid) && onlyChanged(['name', 'type', 'currency', 'lang', 'logo', 'colors', 'program', 'design', 'tiers', 'designVersion', 'orderSettings']))
+        || (manages(bid) && onlyChanged(['program', 'tiers', 'designVersion', 'orderSettings']))
         || (onlyChanged(['memberSeq']) && incBy1('memberSeq') && live(resource.data))   // public join
-        || (isAdmin() && onlyChanged(['status', 'plan', 'paidUntil', 'trialEndsAt']));     // only the platform admin changes billing
+        || (isAdmin() && onlyChanged(['status', 'plan', 'paidUntil', 'trialEndsAt', 'features']));     // only the platform admin changes billing and pilot features
       allow delete: if false;
 
       match /members/{m} {
@@ -178,6 +178,26 @@ service cloud.firestore {
         allow delete: if false;
       }
       match /locations/{lid} { allow read: if isMember(bid); allow write: if manages(bid); }
+
+      // ── Online ordering (pilot) ──
+      // Only when the platform admin switched ordering on for the platform and for this business.
+      function orderingOn() {
+        return exists(settingsPath()) && get(settingsPath()).data.get('features', {}).get('ordering', false) == true
+          && biz(bid).get('features', {}).get('ordering', false) == true;
+      }
+      match /menu/{mid} { allow read: if true; allow write: if manages(bid); }
+      match /orders/{oid} {
+        allow read: if cashier(bid);
+        // A customer orders from their secret card link; staff see it live and move it along.
+        allow create: if request.resource.data.status == 'new' && bizActive(bid) && orderingOn()
+          && get(/databases/$(db)/documents/cards/$(request.resource.data.cardToken)).data.businessId == bid
+          && get(/databases/$(db)/documents/cards/$(request.resource.data.cardToken)).data.customerId == request.resource.data.customerId
+          && request.resource.data.items is list && request.resource.data.items.size() > 0 && request.resource.data.items.size() <= 30
+          && request.resource.data.total is number && request.resource.data.total >= 0;
+        allow update: if (cashier(bid) && request.resource.data.cardToken == resource.data.cardToken && request.resource.data.customerId == resource.data.customerId)
+          || (resource.data.status == 'new' && request.resource.data.status == 'cancelled' && onlyChanged(['status', 'updatedAt']));
+        allow delete: if false;
+      }
       match /segments/{sid} { allow read, write: if crm(bid); }
       match /templates/{tid} { allow read, write: if marketer(bid); }
       match /campaigns/{cid} {
@@ -220,6 +240,15 @@ service cloud.firestore {
           || (request.resource.data.type == 'join' && !exists(/databases/$(db)/documents/cards/$(token))
               && existsAfter(/databases/$(db)/documents/cards/$(token)));
         allow update, delete: if false;
+      }
+      // The customer's own copy of their orders (live status on their card).
+      match /orders/{oid} {
+        allow read: if true;                // reachable only with the token
+        allow create: if request.resource.data.status == 'new'
+          && getAfter(/databases/$(db)/documents/businesses/$(request.resource.data.businessId)/orders/$(oid)).data.cardToken == token;
+        allow update: if cashier(get(/databases/$(db)/documents/cards/$(token)).data.businessId)
+          || (resource.data.status == 'new' && request.resource.data.status == 'cancelled' && onlyChanged(['status', 'updatedAt']));
+        allow delete: if false;
       }
       match /redemptions/{code} {
         allow read: if true;
