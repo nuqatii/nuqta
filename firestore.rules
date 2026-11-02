@@ -241,6 +241,14 @@ service cloud.firestore {
               && existsAfter(/databases/$(db)/documents/cards/$(token)));
         allow update, delete: if false;
       }
+      // Phones that asked for "order ready" notifications. Write-only: only the server reads them.
+      match /push/{pid} {
+        allow read, delete: if false;
+        allow create, update: if exists(/databases/$(db)/documents/cards/$(token))
+          && request.resource.data.keys().hasOnly(['endpoint', 'keys', 'at'])
+          && request.resource.data.endpoint is string && request.resource.data.endpoint.size() < 1000
+          && request.resource.data.endpoint.matches('https://.*');
+      }
       // The customer's own copy of their orders (live status on their card).
       match /orders/{oid} {
         allow read: if true;                // reachable only with the token
