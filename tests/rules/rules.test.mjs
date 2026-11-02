@@ -141,3 +141,22 @@ test('platform admin: reads owner contacts, keeps private notes, lists all payme
   await assertSucceeds(getDocs(collectionGroup(as(ADMIN), 'payments')));
   await assertFails(getDocs(collectionGroup(as(JOE), 'payments')));
 });
+
+test('online ordering: only when both switches are on; customers cancel only new orders; staff move them', async () => {
+  const order = { businessId: BID, customerId: CID, cardToken: TOKEN, code: 'K7P', items: [{ id: 'm1', qty: 1, price: 100 }], total: 100, status: 'new', createdAt: 1, updatedAt: 1 };
+  await assertFails(setDoc(doc(anon(), `businesses/${BID}/orders/o1`), order));          // switches off
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'platform/settings'), { signupsOpen: true, features: { ordering: true } });
+    await updateDoc(doc(c.firestore(), 'businesses', BID), { features: { ordering: true } });
+  });
+  await assertSucceeds(setDoc(doc(anon(), `businesses/${BID}/orders/o1`), order));
+  await assertFails(setDoc(doc(anon(), `businesses/${BID}/orders/o2`), { ...order, customerId: 'someone_else' }));
+  await assertFails(getDoc(doc(anon(), `businesses/${BID}/orders/o1`)));
+  await assertSucceeds(getDoc(doc(as(CASHIER), `businesses/${BID}/orders/o1`)));
+  await assertSucceeds(updateDoc(doc(as(CASHIER), `businesses/${BID}/orders/o1`), { status: 'accepted', updatedAt: 2 }));
+  await assertFails(updateDoc(doc(anon(), `businesses/${BID}/orders/o1`), { status: 'cancelled', updatedAt: 3 }));   // already started
+  await assertFails(updateDoc(doc(as(MKT), `businesses/${BID}/orders/o1`), { status: 'ready', updatedAt: 3 }));
+  await assertSucceeds(setDoc(doc(as(JOE), `businesses/${BID}/menu/m1`), { name: 'Tea', price: 100 }));
+  await assertFails(setDoc(doc(as(CASHIER), `businesses/${BID}/menu/m2`), { name: 'Tea', price: 1 }));
+  await assertSucceeds(getDoc(doc(anon(), `businesses/${BID}/menu/m1`)));
+});

@@ -218,3 +218,40 @@ test('Basic includes up to 3 branches; Enterprise has no limit; old plan names c
   const first = (await S.listLocations(bid))[0];
   await S.saveLocation(bid, { ...first, name: 'Renamed' });   // editing an existing branch is always fine
 });
+
+test('online ordering: off by default; with both switches on a customer orders and "Collected" adds points', async () => {
+  await S.signOut(); await S.signIn('owner@joespizza.demo', 'demo1234');
+  const [m] = await S.myMemberships(); const bid = m.businessId;
+  const item = await S.saveMenuItem(bid, { name: 'Margherita', nameAr: 'مارغريتا', price: 2500, category: 'Pizza' });
+  await S.saveMenuItem(bid, { name: 'Sold out pie', price: 9999, available: false });
+  const menu = await S.listMenu(bid);
+  const gone = menu.find((x) => x.available === false).id;
+  await assert.rejects(S.placeOrder(DEMO_CARD, { items: [{ id: item, qty: 1 }] }), /ordering-off/);   // switches off
+  assert.equal((await S.getCard(DEMO_CARD)).ordering, false);
+  await S.signOut(); await S.signIn('admin@nuqta.demo', 'demo1234');
+  await S.adminSetPlatformFeature('ordering', true);
+  await assert.rejects(S.placeOrder(DEMO_CARD, { items: [{ id: item, qty: 1 }] }), /ordering-off/);   // business switch still off
+  await S.adminSetFeature(bid, 'ordering', true);
+  assert.equal((await S.getCard(DEMO_CARD)).ordering, true);
+  // The customer (no login) orders 2 pizzas; the phone's price is ignored, sold-out items are dropped.
+  const o = await S.placeOrder(DEMO_CARD, { items: [{ id: item, qty: 2, price: 1 }, { id: gone, qty: 1 }], note: 'extra cheese', pickup: 'ASAP' });
+  assert.equal(o.total, 5000);
+  const before = (await S.getCard(DEMO_CARD)).card.points;
+  await S.signOut(); await S.signIn('staff@joespizza.demo', 'demo1234');
+  await assert.rejects(S.setOrderStatus(bid, o.id, 'collected'), /order-moved/);   // must be accepted first
+  await S.setOrderStatus(bid, o.id, 'accepted');
+  await S.setOrderStatus(bid, o.id, 'ready');
+  assert.equal((await S.db.get(`cards/${DEMO_CARD}/orders/${o.id}`)).status, 'ready');
+  const r = await S.setOrderStatus(bid, o.id, 'collected');
+  assert.ok(r.earned > 0);
+  assert.equal((await S.getCard(DEMO_CARD)).card.points, before + r.earned);
+  // Customers can cancel only before the café starts; 3 open orders at most.
+  const o2 = await S.placeOrder(DEMO_CARD, { items: [{ id: item, qty: 1 }] });
+  await S.cancelMyOrder(DEMO_CARD, o2.id);
+  assert.equal((await S.db.get(`businesses/${bid}/orders/${o2.id}`)).status, 'cancelled');
+  for (let i = 0; i < 3; i++) await S.placeOrder(DEMO_CARD, { items: [{ id: item, qty: 1 }] });
+  await assert.rejects(S.placeOrder(DEMO_CARD, { items: [{ id: item, qty: 1 }] }), /too-many-orders/);
+  await S.signOut(); await S.signIn('admin@nuqta.demo', 'demo1234');
+  await S.adminSetPlatformFeature('ordering', false);
+  assert.equal((await S.getCard(DEMO_CARD)).ordering, false);
+});

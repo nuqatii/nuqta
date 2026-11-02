@@ -1,7 +1,7 @@
 // Business portal shell: auth gate, business picker, role-aware nav, hash router.
 import { getService } from '../data/index.js';
 import { t, setLang, lang, appName } from '../core/i18n.js';
-import { can, DAY, accessState } from '../core/loyalty.js';
+import { can, DAY, accessState, orderingOn } from '../core/loyalty.js';
 import { esc, icon, $, modal, showError, confirmBox, toast } from '../ui/ui.js';
 
 const S = await getService();
@@ -20,14 +20,14 @@ async function installApp() {
 
 const NAV = [
   { group: 'nav_group_daily', items: [
-    { id: 'dashboard', icon: 'home' }, { id: 'checkout', icon: 'scan', cls: 'checkout-link' },
+    { id: 'dashboard', icon: 'home' }, { id: 'checkout', icon: 'scan', cls: 'checkout-link' }, { id: 'orders', icon: 'bag', ordering: true },
     { id: 'customers', icon: 'users' }, { id: 'transactions', icon: 'list' },
   ] },
   { group: 'nav_group_grow', items: [
     { id: 'rewards', icon: 'gift' }, { id: 'crm', icon: 'pie' }, { id: 'campaigns', icon: 'send' }, { id: 'analytics', icon: 'chart' }, { id: 'reports', icon: 'receipt' }, { id: 'qr', icon: 'qr' },
   ] },
   { group: 'nav_group_setup', items: [
-    { id: 'program', icon: 'sliders' }, { id: 'designer', icon: 'palette' }, { id: 'locations', icon: 'pin' }, { id: 'staff', icon: 'team' }, { id: 'settings', icon: 'gear' }, { id: 'billing', icon: 'card' },
+    { id: 'program', icon: 'sliders' }, { id: 'designer', icon: 'palette' }, { id: 'menu', icon: 'list', ordering: true }, { id: 'locations', icon: 'pin' }, { id: 'staff', icon: 'team' }, { id: 'settings', icon: 'gear' }, { id: 'billing', icon: 'card' },
   ] },
 ];
 const PAGES = {
@@ -39,6 +39,7 @@ const PAGES = {
   analytics: () => import('./biz-analytics.js'), reports: () => import('./biz-report.js'), locations: () => import('./biz-team.js'), staff: () => import('./biz-team.js'),
   settings: () => import('./biz-settings.js'), qr: () => import('./biz-settings.js'),
   billing: () => import('./biz-billing.js'),
+  orders: () => import('./biz-orders.js'), menu: () => import('./biz-orders.js'),
 };
 const AREA = { customer: 'customers' };
 
@@ -60,7 +61,15 @@ const ctx = {
     if (!this._live.a) this._live.a = liveList('a', (on) => S.watchActivity(this.bid, Date.now() - 120 * DAY, on), (rows) => { this._activity = rows; });
     await this._live.a; return this._activity;
   },
-  invalidate() { this._unsub.forEach((u) => { try { u(); } catch {} }); this._unsub = []; this._live = {}; this._customers = null; this._activity = null; },
+  // Online orders (pilot): live, with a sound and a message when a new one arrives.
+  _orders: null,
+  ordering() { return orderingOn(this.platform, this.biz); },
+  async orders() {
+    if (!this.ordering() || !can(this.role, 'orders')) return [];
+    if (!this._live.o) this._live.o = liveList('o', (on) => S.watchOrders(this.bid, on), (rows, prev) => { this._orders = rows; announceOrders(rows, prev); });
+    await this._live.o; return this._orders;
+  },
+  invalidate() { this._unsub.forEach((u) => { try { u(); } catch {} }); this._unsub = []; this._live = {}; this._customers = null; this._activity = null; this._orders = null; },
   // Patch a customer in the cache after checkout so the next lookup is instant.
   patchCustomer(c) { if (!this._customers) return; const i = this._customers.findIndex((x) => x.id === c.id); if (i >= 0) this._customers[i] = { ...this._customers[i], ...c }; else this._customers.unshift(c); if (!this._live.a) this._activity = null; },
   // Refresh the business doc (name/logo may show in the chrome) and re-render the current page.
@@ -81,6 +90,18 @@ function liveList(key, start, apply) {
     }).then((unsub) => { if (bid === ctx.bid) ctx._unsub.push(unsub); else unsub(); }).catch(reject);
   });
 }
+// New online order: a short sound, a message, and a count on the Orders menu item.
+function beep() {
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(); [0, 0.18].forEach((d) => { const o = a.createOscillator(); const g = a.createGain(); o.frequency.value = 880; o.connect(g); g.connect(a.destination); g.gain.setValueAtTime(0.25, a.currentTime + d); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + d + 0.15); o.start(a.currentTime + d); o.stop(a.currentTime + d + 0.16); }); } catch { /* no sound */ }
+}
+function announceOrders(rows, prev) {
+  const n = rows.filter((o) => o.status === 'new').length;
+  root.querySelectorAll('[data-obadge]').forEach((x) => { x.textContent = n || ''; x.hidden = !n; });
+  if (!prev) return;
+  const known = new Set(prev.map((o) => o.id));
+  const fresh = rows.filter((o) => !known.has(o.id) && o.status === 'new');
+  if (fresh.length) { beep(); toast(fresh.length === 1 ? t('o_new_toast', { code: fresh[0].code, name: fresh[0].firstName }) : t('o_new_toast_n', { n: fresh.length })); }
+}
 // "Maya just joined" for members who sign up by QR code while the app is open.
 function announceJoins(rows, prev) {
   if (!prev) return;
@@ -90,7 +111,7 @@ function announceJoins(rows, prev) {
   else if (fresh.length > 1) toast(t('live_joined_n', { n: fresh.length }));
 }
 // Re-draw the current page quietly (no spinner) when live data changes, on pages that only show data.
-const LIVE_PAGES = new Set(['dashboard', 'customers', 'customer', 'transactions', 'analytics', 'crm']);
+const LIVE_PAGES = new Set(['dashboard', 'customers', 'customer', 'transactions', 'analytics', 'crm', 'orders']);
 let liveTimer = null; let livePending = false;
 function liveRefresh() {
   clearTimeout(liveTimer);
@@ -131,10 +152,11 @@ async function selectBusiness(bid) {
   localStorage.setItem('nuqta_bid', bid);
   renderChrome();
   route();
+  if (ctx.ordering() && ctx.can('orders')) ctx.orders().catch(() => {});   // start listening for new orders on every page
 }
 
 function navItems() {
-  return NAV.map((g) => ({ ...g, items: g.items.filter((i) => ctx.can(i.id)) })).filter((g) => g.items.length);
+  return NAV.map((g) => ({ ...g, items: g.items.filter((i) => ctx.can(i.id) && (!i.ordering || ctx.ordering())) })).filter((g) => g.items.length);
 }
 function currentId() { const h = location.hash.replace(/^#\/?/, '').split('?')[0].split('/')[0]; return h || defaultPage(); }
 const defaultPage = () => (ctx.can('dashboard') ? 'dashboard' : 'checkout');
@@ -183,7 +205,7 @@ function renderChrome() {
       <div class="brandmark"><span class="dot"></span>${esc(appName())}</div>
       ${bizButton()}
       <nav class="nav">
-        ${groups.map((g) => `<div class="nav-group">${t(g.group)}</div>${g.items.map((i) => `<a href="#/${i.id}" class="${i.cls || ''}" ${curNav === i.id ? 'aria-current="page"' : ''}>${icon(i.icon)}${t('nav_' + i.id)}</a>`).join('')}`).join('')}
+        ${groups.map((g) => `<div class="nav-group">${t(g.group)}</div>${g.items.map((i) => `<a href="#/${i.id}" class="${i.cls || ''}" ${curNav === i.id ? 'aria-current="page"' : ''}>${icon(i.icon)}${t('nav_' + i.id)}${i.id === 'orders' ? '<b class="nav-badge" data-obadge hidden></b>' : ''}</a>`).join('')}`).join('')}
       </nav>
       <div class="side-foot">
         ${standalone ? '' : `<button class="btn ghost sm" data-install style="justify-content:flex-start">${icon('dl')}${t('bi_install')}</button>`}
@@ -211,6 +233,7 @@ function renderChrome() {
       await S.resetDemo(); localStorage.removeItem('nuqta_bid'); location.replace('login.html');
     }
   });
+  if (ctx._orders) announceOrders(ctx._orders, null);   // keep the new-orders count after a redraw
 }
 
 async function switchBusiness() {
@@ -252,6 +275,7 @@ async function route() {
   }
   const area = AREA[page] || page;
   if (!PAGES[page] || !ctx.can(area)) return ctx.nav(defaultPage());
+  if ((page === 'orders' || page === 'menu') && !ctx.ordering()) return ctx.nav(defaultPage());
   const seq = ++routeSeq;
   // update nav highlight without full re-render
   const navId = page === 'customer' ? 'customers' : page;

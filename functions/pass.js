@@ -3,8 +3,8 @@
 import * as L from './shared/loyalty.js';
 
 const TXT = {
-  en: { points: 'Points', stamps: 'Stamps', visits: 'Visits', spend: 'Spent', ready: 'Rewards ready', tier: 'Tier', open: 'Open my card', member: 'Member', logo: 'Logo' },
-  ar: { points: 'النقاط', stamps: 'الأختام', visits: 'الزيارات', spend: 'الإنفاق', ready: 'مكافآت جاهزة', tier: 'المستوى', open: 'افتح بطاقتي', member: 'العضو', logo: 'الشعار' },
+  en: { points: 'Points', stamps: 'Stamps', visits: 'Visits', spend: 'Spent', ready: 'Rewards ready', tier: 'Tier', open: 'Open my card', order: 'Order ahead', member: 'Member', logo: 'Logo' },
+  ar: { points: 'النقاط', stamps: 'الأختام', visits: 'الزيارات', spend: 'الإنفاق', ready: 'مكافآت جاهزة', tier: 'المستوى', open: 'افتح بطاقتي', order: 'اطلب مسبقاً', member: 'العضو', logo: 'الشعار' },
 };
 const CUR = { SYP: { en: 'SYP', ar: 'ل.س' }, USD: { en: 'USD', ar: 'دولار' } };
 
@@ -51,7 +51,7 @@ export function buildClass({ issuerId, bid, business, logoUrl, locations }) {
   };
 }
 
-export function buildObject({ issuerId, token, card, business, rewards, siteUrl, heroUrl }) {
+export function buildObject({ issuerId, token, card, business, rewards, siteUrl, heroUrl, ordering = false }) {
   const main = langOf(business);
   const prog = business.program || { type: 'points' };
   const live = liveRewards(rewards);
@@ -79,7 +79,9 @@ export function buildObject({ issuerId, token, card, business, rewards, siteUrl,
     loyaltyPoints: primary,
     secondaryLoyaltyPoints: { label: rw.text, localizedLabel: rw.localized, balance: { int: ready } },
     barcode: { type: 'QR_CODE', value: String(card.qrValue || card.memberNumber || ''), alternateText: String(card.memberNumber || '') },
-    linksModuleData: { uris: [{ id: 'card', uri: `${siteUrl}rewards.html?c=${token}`, description: TXT[main].open, localizedDescription: word('open', main).localized }] },
+    linksModuleData: { uris: [
+      ...(ordering ? [{ id: 'order', uri: `${siteUrl}rewards.html?c=${token}#order`, description: TXT[main].order, localizedDescription: word('order', main).localized }] : []),
+      { id: 'card', uri: `${siteUrl}rewards.html?c=${token}`, description: TXT[main].open, localizedDescription: word('open', main).localized }] },
     textModulesData: [],
   };
   // Stamp cards get a picture of the stamp grid (Google has no stamp layout of its own).

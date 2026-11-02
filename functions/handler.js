@@ -18,6 +18,9 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
   // The image depends only on the business design and the numbers, so every customer at the same step shares one cached image.
   const heroUrlFor = (bid, b) => (st) => `${fnBase()}/stamps?b=${bid}&p=${st.progress}&g=${st.goal}&r=${st.ready > 0 ? 1 : 0}&v=${b.designVersion || 1}`;
 
+  // Online ordering (pilot) is on for a business only when the platform switch and its own switch are both on.
+  const orderingFor = async (b) => !!(b?.features?.ordering && (await get('platform/settings'))?.features?.ordering);
+
   async function loadCard(token) {
     if (!TOKEN_RE.test(token || '')) return null;
     const card = await get(`cards/${token}`);
@@ -41,7 +44,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     const iss = issuerId();
     const bid = d.card.businessId;
     await google.upsertClass(buildClass({ issuerId: iss, bid, business: d.business, logoUrl: logoUrl(bid, d.business), locations: await locationsOf(bid) }));
-    const obj = buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) });
+    const obj = buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business), ordering: await orderingFor(d.business) });
     await google.upsertObject(obj);
     const t = Date.now();
     await firestore.doc(`cards/${token}`).set({ walletGoogle: true, walletStatus: 'google', walletGoogleAt: t }, { merge: true });
@@ -57,7 +60,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     const jobs = [];
     if (token) {
       const d = await loadCard(token);
-      if (d && iss && d.card.walletGoogle) jobs.push(google.updateObjectIfExists(buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business) })));
+      if (d && iss && d.card.walletGoogle) jobs.push(orderingFor(d.business).then((ordering) => google.updateObjectIfExists(buildObject({ issuerId: iss, token, ...d, siteUrl, heroUrl: heroUrlFor(d.card.businessId, d.business), ordering }))));
       if (d && apple?.enabled() && d.card.walletApple) jobs.push(apple.touch(token, d.card));
     } else if (ID_RE.test(bid)) {
       const business = await get(`businesses/${bid}`);
@@ -153,6 +156,30 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     return res.status(200).json({ sent: true, to });
   }
 
+  // "Your order is ready" notification on the customer's Google Wallet pass. Staff of that business only.
+  async function orderReady(req, res) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+    const tok = String(req.get?.('authorization') || req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
+    let uid = null;
+    try { uid = tok && verifyToken ? (await verifyToken(tok)).uid : null; } catch { uid = null; }
+    if (!uid) return res.status(401).json({ error: 'unauthenticated' });
+    const { bid, oid } = req.body || {};
+    if (!ID_RE.test(String(bid || '')) || !/^[A-Za-z0-9_-]{4,64}$/.test(String(oid || ''))) return res.status(400).json({ error: 'invalid' });
+    const member = await get(`businesses/${bid}/members/${uid}`);
+    if (!member || !(L ? L.can(member.role, 'orders') : ['owner', 'manager', 'staff'].includes(member.role))) return res.status(403).json({ error: 'permission-denied' });
+    const o = await get(`businesses/${bid}/orders/${oid}`);
+    if (!o || o.status !== 'ready') return res.status(409).json({ error: 'not-ready' });
+    const card = o.cardToken ? await get(`cards/${o.cardToken}`) : null;
+    if (!card?.walletGoogle || card.deleted) return res.status(200).json({ sent: false });
+    const b = await get(`businesses/${bid}`); const ar = (b?.lang || 'ar') !== 'en';
+    const r = await google.addMessage(objectIdFor(issuerId(), card), {
+      id: `ready_${oid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60),
+      header: ar ? `طلبك #${o.code} جاهز ☕` : `Order #${o.code} is ready ☕`,
+      body: ar ? `أظهر بطاقتك في ${b?.name || ''} لاستلام طلبك.` : `Show your card at ${b?.name || ''} to collect it.`,
+    }, true);
+    return res.status(200).json({ sent: r !== 'missing', result: r });
+  }
+
   return async function handler(req, res) {
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -165,6 +192,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
       catch (e) { console.error('apple', e); return res.status(500).send(''); }
     }
     const route = path.replace(/\/+$/, '').split('/').pop();
+    if (route === 'order-ready') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await orderReady(req, res); } catch (e) { console.error('order-ready', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'receipt') { try { return await receiptEmail(req, res); } catch (e) { console.error('receipt', e); return res.status(500).json({ error: 'email-failed' }); } }
     if (route === 'message') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await message(req, res); } catch (e) { console.error('message', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'sync') { try { return await sync(req, res); } catch (e) { console.error('sync', e); return res.status(204).send(''); } }

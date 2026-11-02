@@ -1,8 +1,8 @@
 // Customer experience: join via QR (?b=slug) and the digital card app (?c=token). No login.
 import { getService } from '../data/index.js';
 import { CONFIG, walletFnUrl, appleFnUrl } from '../config.js';
-import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName } from '../core/i18n.js';
-import { tierFor, nextTier, CHANNELS, canOperate, stampGoal, stampState, readyCount, isStampy } from '../core/loyalty.js';
+import { t, setLang, lang, fmtNum, fmtDate, fmtTime, ago, unitWord, tierName, rewardName, programName, appName, fmtMoney } from '../core/i18n.js';
+import { tierFor, nextTier, CHANNELS, canOperate, stampGoal, stampState, readyCount, isStampy, priceOrder, ORDER_OPEN } from '../core/loyalty.js';
 import { esc, icon, $, showError, toast, modal, qrSvg, errText, legalLink, legalLinks } from '../ui/ui.js';
 import { renderCard } from '../ui/card.js';
 import { EV_ICON, eventTitle, signed, evName } from './biz-common.js';
@@ -115,6 +115,9 @@ async function cardApp(token) {
   applyLang(b.lang); brand(b);
   let tab = location.hash.slice(1) || 'card';
   let acts = null, reds = null;
+  // Ordering (pilot): the menu, what's in the basket, and this card's orders (live).
+  let menu = null; const cart = new Map(); let myOrders = []; let unsubOrders = null; const lastStatus = new Map();
+  if (tab === 'order' && !data.ordering) tab = 'card';
   const welcome = qs.get('welcome') === '1';
   if (welcome) history.replaceState(null, '', `rewards.html?c=${token}`);
 
@@ -135,7 +138,7 @@ async function cardApp(token) {
     root.className = 'cust'; root.style.setProperty('--cb', b.colors?.bg || '#0F6E5C');
     root.innerHTML = `<header class="cust-head">${walletLink()}${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ''}<b>${esc(b.name)}</b><button class="btn ghost sm" id="lang">${t('switch_lang')}</button></header>
       <main class="cust-body" id="cb">${inner}</main>
-      <nav class="cust-nav"><div>${[['card', 'card', t('c_card')], ['rewards', 'gift', t('c_rewards')], ['activity', 'clock', t('c_activity')], ['profile', 'user', t('c_profile')]].map(([id, ic, label]) =>
+      <nav class="cust-nav"><div style="grid-template-columns:repeat(${data.ordering ? 5 : 4},1fr)">${[['card', 'card', t('c_card')], ...(data.ordering ? [['order', 'bag', t('o_tab')]] : []), ['rewards', 'gift', t('c_rewards')], ['activity', 'clock', t('c_activity')], ['profile', 'user', t('c_profile')]].map(([id, ic, label]) =>
         `<button data-tab="${id}" ${tab === id ? 'aria-current="page"' : ''}>${icon(ic)}<span>${label}</span>${id === 'rewards' && readyN() ? `<span class="badge">${readyN()}</span>` : ''}</button>`).join('')}</div></nav>`;
     $('#lang').onclick = () => { toggleLang(); render(); };
     root.querySelectorAll('[data-tab]').forEach((x) => (x.onclick = () => { tab = x.dataset.tab; location.hash = tab; render(); }));
@@ -151,6 +154,7 @@ async function cardApp(token) {
       ${renderCard({ business: b, card: c, rewardsReady: readyN(), goal: stampGoal(b.program, live()) })}
       ${wb.html}
       ${st && st.ready ? `<button class="btn primary lg block" data-tab="rewards">${icon('gift')}${st.ready === 1 ? t('c_rewards_count_one') : t('c_rewards_count', { n: fmtNum(st.ready) })}</button>` : ''}
+      ${data.ordering ? `<button class="btn lg block" id="goorder">${icon('bag')}${t('o_order_now')}</button>` : ''}
       <p class="small muted" style="text-align:center">${t('c_show_staff')}</p>
       ${openCodes().length ? `<section class="panel"><div class="panel-h"><h3>${t('c_open_codes')}</h3></div><div class="panel-b"><ul class="list">${openCodes().map((r) => `<li><span class="grow"><span class="t">${esc(evName(r))}</span><span class="s">${t('c_code_exp', { t: fmtTime(r.expiresAt) })}</span></span><button class="btn sm" data-show="${esc(r.id)}">${esc(r.id)}</button></li>`).join('')}</ul></div></section>` : ''}
       ${st && live().length ? `<section class="panel"><div class="panel-b stack" style="gap:8px"><b>${t('c_next_reward')}</b><div class="progress-line"><i style="width:${(st.progress / st.goal) * 100}%"></i></div><span class="small muted">${fmtNum(st.progress)}/${fmtNum(st.goal)} · ${t('c_stamps_left', { n: fmtNum(st.left) })}</span></div></section>` : ''}
@@ -207,9 +211,78 @@ async function cardApp(token) {
       </div></section>`;
   }
 
+  // ── Order tab ──
+  const itemName = (m) => (lang === 'ar' && m.nameAr) || m.name || m.nameAr || '';
+  const money = (n) => fmtMoney(n, b.currency);
+  const STEPS = ['new', 'accepted', 'ready'];
+  function orderCard(o) {
+    const step = STEPS.indexOf(o.status);
+    const done = o.status === 'collected', off = o.status === 'declined' || o.status === 'cancelled';
+    return `<section class="panel order-card ${o.status}"><div class="panel-b stack" style="gap:10px">
+      <div class="spread"><b>${t('o_order')} <span class="ltr">#${esc(o.code)}</span></b><span class="chip ${o.status === 'ready' ? 'ok' : off ? 'bad' : done ? '' : 'brand'}">${t('o_st_' + o.status)}</span></div>
+      ${!off && !done ? `<ol class="o-steps">${STEPS.map((s, i) => `<li class="${i <= step ? 'on' : ''}"><i></i><span>${t('o_step_' + s)}</span></li>`).join('')}</ol>` : ''}
+      ${o.status === 'ready' ? `<div class="note" style="background:var(--ok-tint);color:var(--ok)">${icon('check')}<span>${t('o_ready_msg', { biz: esc(b.name) })}</span></div>` : ''}
+      ${o.status === 'declined' ? `<div class="note">${icon('info')}<span>${t('o_declined_msg')}${o.reason ? ': ' + esc(o.reason) : ''}</span></div>` : ''}
+      <div class="small muted">${o.items.map((l) => `${fmtNum(l.qty)}× ${esc(itemName(l))}`).join(' · ')}</div>
+      <div class="spread"><span class="small muted">${ago(o.createdAt)}${o.pickup ? ' · ' + esc(o.pickup) : ''}</span><b>${money(o.total)}</b></div>
+      ${o.status === 'new' ? `<button class="btn sm ghost" data-ocancel="${esc(o.id)}" style="justify-self:start">${t('o_cancel')}</button>` : ''}
+    </div></section>`;
+  }
+  async function orderTab() {
+    if (!menu) menu = await S.listMenu(b.id);
+    const open = myOrders.filter((o) => ORDER_OPEN.includes(o.status) || (Date.now() - (o.updatedAt || 0) < 3600e3 && o.status !== 'cancelled'));
+    const paused = b.orderSettings?.paused;
+    const cats = [...new Set(menu.map((m) => m.category || ''))];
+    const priced = priceOrder([...cart].map(([id, qty]) => ({ id, qty })), menu);
+    const row = (m) => { const q = cart.get(m.id) || 0; const off = m.available === false;
+      return `<div class="menu-row ${off ? 'off' : ''}">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div class="grow" style="flex:1;min-width:0"><b>${esc(itemName(m))}</b>${m.description ? `<div class="small muted">${esc(m.description)}</div>` : ''}<div class="small"><b>${money(m.price)}</b>${off ? ` · <span class="muted">${t('o_sold_out')}</span>` : ''}</div></div>
+        ${off || paused ? '' : q ? `<div class="qty"><button data-dec="${esc(m.id)}" aria-label="−">−</button><b>${fmtNum(q)}</b><button data-inc="${esc(m.id)}" aria-label="+">+</button></div>` : `<button class="btn sm" data-inc="${esc(m.id)}">${icon('plus')}${t('o_add')}</button>`}</div>`; };
+    return `${open.length ? `<h2>${t('o_my_orders')}</h2>${open.map(orderCard).join('')}` : ''}
+      <h2>${t('o_menu')}</h2>
+      ${paused ? `<div class="note">${icon('clock')}<span>${t('o_paused')}</span></div>` : `<p class="small muted" style="margin-top:-6px">${t('o_how')}</p>`}
+      ${menu.length ? cats.map((c) => `${c ? `<h3 class="menu-cat">${esc(c)}</h3>` : ''}${menu.filter((m) => (m.category || '') === c).map(row).join('')}`).join('') : `<p class="muted">${t('o_no_menu')}</p>`}
+      ${priced.count && !paused ? `<div class="basket-bar"><button class="btn primary lg block" id="basket">${icon('bag')}${t('o_view_basket', { n: fmtNum(priced.count) })} · ${money(priced.total)}</button></div>` : ''}`;
+  }
+  function basketDialog() {
+    const priced = priceOrder([...cart].map(([id, qty]) => ({ id, qty })), menu);
+    const times = ['asap', '15', '30', '60'];
+    modal({ title: t('o_basket'), body: `<ul class="list">${priced.lines.map((l) => `<li><span class="grow"><span class="t">${fmtNum(l.qty)}× ${esc(itemName(l))}</span></span><span class="num">${money(l.price * l.qty)}</span></li>`).join('')}
+        <li><span class="grow"><b>${t('o_total')}</b></span><b>${money(priced.total)}</b></li></ul>
+      <form class="form" id="of" style="margin-top:12px">
+        <label class="field"><span>${t('o_pickup')}</span><select class="input" name="pickup">${times.map((x) => `<option value="${x}">${t('o_pick_' + x)}</option>`).join('')}</select></label>
+        <label class="field"><span>${t('o_note')} <span class="muted">(${t('optional')})</span></span><input class="input" name="note" maxlength="200" placeholder="${t('o_note_ph')}"></label>
+        <div class="note">${icon('info')}<span>${t('o_pay_pickup')}</span></div></form>`,
+    actions: [{ label: t('cancel'), value: null }, { label: t('o_send'), kind: 'primary', onClick: async (m) => {
+      const f = $('#of', m);
+      const r = await S.placeOrder(token, { items: priced.lines.map((l) => ({ id: l.id, qty: l.qty })), note: f.note.value, pickup: t('o_pick_' + f.pickup.value) });
+      cart.clear(); toast(t('o_sent', { code: r.code })); scrollTo(0, 0); return true;
+    } }] }).then(() => render());
+  }
+  function watchOrders() {
+    if (unsubOrders || !data.ordering) return;
+    unsubOrders = S.watchMyOrders(token, (rows) => {
+      for (const o of rows) {   // tell the customer when their order is ready
+        const prev = lastStatus.get(o.id);
+        if (prev && prev !== o.status && o.status === 'ready') { toast(t('o_ready_toast', { code: o.code })); try { navigator.vibrate?.([200, 100, 200]); } catch {} }
+        lastStatus.set(o.id, o.status);
+      }
+      myOrders = rows;
+      if (tab === 'order' && !document.querySelector('.modal-back')) render();
+    });
+  }
+
   async function render() {
-    const inner = tab === 'rewards' ? rewardsTab() : tab === 'activity' ? await activityTab() : tab === 'profile' ? profileTab() : cardTab();
+    if (data.ordering) watchOrders();
+    const inner = tab === 'rewards' ? rewardsTab() : tab === 'activity' ? await activityTab() : tab === 'profile' ? profileTab() : tab === 'order' && data.ordering ? await orderTab() : cardTab();
     shell(inner);
+    root.querySelectorAll('[data-inc]').forEach((x) => (x.onclick = () => { cart.set(x.dataset.inc, Math.min(20, (cart.get(x.dataset.inc) || 0) + 1)); render(); }));
+    root.querySelectorAll('[data-dec]').forEach((x) => (x.onclick = () => { const q = (cart.get(x.dataset.dec) || 0) - 1; if (q > 0) cart.set(x.dataset.dec, q); else cart.delete(x.dataset.dec); render(); }));
+    $('#basket')?.addEventListener('click', basketDialog);
+    root.querySelectorAll('[data-ocancel]').forEach((x) => (x.onclick = async () => {
+      if (!(await modal({ title: t('o_cancel'), body: `<p>${t('o_cancel_q')}</p>`, actions: [{ label: t('cancel'), value: false }, { label: t('o_cancel'), kind: 'danger', value: true }] }))) return;
+      try { await S.cancelMyOrder(token, x.dataset.ocancel); } catch (e) { showError(e); }
+    }));
+    $('#goorder')?.addEventListener('click', () => { tab = 'order'; location.hash = 'order'; render(); });
     root.querySelectorAll('[data-redeem]').forEach((x) => (x.onclick = () => redeem(x.dataset.redeem)));
     root.querySelectorAll('[data-show]').forEach((x) => (x.onclick = () => { const r = reds.find((y) => y.id === x.dataset.show); showCode({ code: r.id, rewardName: r.rewardName, expiresAt: r.expiresAt }); }));
     const pf = $('#pf');

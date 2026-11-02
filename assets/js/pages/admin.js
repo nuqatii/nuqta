@@ -227,7 +227,10 @@ async function render() {
           ${row(t('ad_trial_end'), fmtDate(b.trialEndsAt))}
           ${b.paidUntil ? row(t('ad_paid_until'), fmtDate(b.paidUntil)) : ''}
           ${b.terms?.acceptedAt ? row(t('ad_terms_ok'), fmtDate(b.terms.acceptedAt)) : ''}
-        </ul></div></section>
+        </ul>
+        <div class="hr" style="margin:12px 0"></div>
+        <label class="check"><input type="checkbox" id="dOrdering" ${b.features?.ordering ? 'checked' : ''}><span><b>${t('ad_ft_ordering')}</b><br><span class="small muted">${settings.features?.ordering ? t('ad_ft_biz_d') : t('ad_ft_biz_off')}</span></span></label>
+        </div></section>
         <section class="panel"><div class="panel-h"><h2>${t('ad_usage')}</h2></div><div class="panel-b"><div class="kpis mini">
           <div class="kpi"><div class="l">${t('k_customers')}</div><div class="v">${fmtNum(b.statCustomers || 0)}</div></div>
           <div class="kpi"><div class="l">${t('ad_txns')}</div><div class="v">${fmtNum(b.statTxns || 0)}</div></div>
@@ -270,6 +273,8 @@ async function render() {
     return `<div class="cols">
       <section class="panel c7"><div class="panel-h"><h2>${t('ad_settings')}</h2></div><div class="panel-b"><form class="form" id="ps">
         <label class="check"><input type="checkbox" name="signupsOpen" ${settings.signupsOpen ? 'checked' : ''}><span>${t('ad_signups')}</span></label>
+        <div class="hr"></div>
+        <label class="check"><input type="checkbox" id="ftOrdering" ${settings.features?.ordering ? 'checked' : ''}><span><b>${t('ad_ft_ordering')}</b><br><span class="small muted">${t('ad_ft_ordering_d')}</span></span></label>
         <label class="field"><span>${t('ad_announcement')}</span><textarea class="input" name="announcement" maxlength="300" dir="auto">${esc(settings.announcement || '')}</textarea></label>
         <div><button class="btn primary" type="submit">${t('save')}</button></div></form></div></section>
       <section class="panel c5"><div class="panel-h"><h2>${t('ad_health')}</h2></div><div class="panel-b"><ul class="list">
@@ -299,6 +304,7 @@ async function render() {
   if (biz && details) {
     const b = { ...details, acc: accessState(details, now) };
     $('#dPay').onclick = () => payDialog(b, settings);
+    $('#dOrdering').onchange = async (e) => { try { await S.adminSetFeature(b.id, 'ordering', e.target.checked); toast(t('saved')); C.details.delete(b.id); } catch (err) { e.target.checked = !e.target.checked; showError(err); } };
     $('#dMore').onclick = () => moreDialog(b);
     $('#dPhone').onsubmit = async (e) => { e.preventDefault(); try { await S.adminSetOwnerPhone(b.id, e.target.phone.value); toast(t('saved')); reload(); } catch (err) { showError(err); } };
     $('#dNoteSave').onclick = async () => { try { await S.adminSaveNote(b.id, $('#dNote').value); toast(t('saved')); reload(); } catch (err) { showError(err); } };
@@ -341,9 +347,12 @@ async function render() {
       try { await S.adminResetFaq(); toast(t('saved')); reload(); } catch (err) { showError(err); }
     };
   }
+  if (tab === 'settings') $('#ftOrdering').onchange = async (e) => {
+    try { await S.adminSetPlatformFeature('ordering', e.target.checked); toast(e.target.checked ? t('ad_ft_on') : t('ad_ft_off')); delete C.settings; } catch (err) { e.target.checked = !e.target.checked; showError(err); }
+  };
   if (tab === 'settings') $('#ps').onsubmit = async (e) => {
     e.preventDefault();
-    try { await S.adminSaveSettings({ ...settings, signupsOpen: e.target.signupsOpen.checked, announcement: e.target.announcement.value }); toast(t('saved')); delete C.settings; } catch (err) { showError(err); }
+    try { await S.adminSaveSettings({ ...settings, features: { ...(settings.features || {}), ordering: $('#ftOrdering').checked }, signupsOpen: e.target.signupsOpen.checked, announcement: e.target.announcement.value }); toast(t('saved')); delete C.settings; } catch (err) { showError(err); }
   };
   if (tab === 'billing') $('#bs').onsubmit = async (e) => {
     e.preventDefault(); const f = e.target;

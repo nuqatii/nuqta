@@ -52,6 +52,31 @@ export const CONFIG = {
   DEFAULT_CURRENCY: 'SYP',     // per-business, editable in Settings
 };
 
+// ─────────────────────────────────────────────────────────────
+//  Test site (test.nuqatii.com): same files, its own Firebase project, so test data never
+//  touches real businesses. Fill TEST.FIREBASE from the test project (TEST_SITE_SETUP.md).
+// ─────────────────────────────────────────────────────────────
+const TEST = {
+  ENV: 'test',
+  SITE_URL: 'https://test.nuqatii.com/',
+  FIREBASE: {
+    apiKey: '',
+    authDomain: '',
+    projectId: '',
+    storageBucket: '',
+    messagingSenderId: '',
+    appId: '',
+  },
+  // Wallet passes need the real issuer accounts, so they stay off on the test site.
+  GOOGLE_WALLET: { issuerId: '', region: 'europe-west1', officialButton: true },
+  APPLE_WALLET: { passTypeId: '', teamId: '', officialButton: false },
+};
+const host = globalThis.location?.hostname || '';
+const serverProject = globalThis.process?.env?.GCLOUD_PROJECT || '';
+CONFIG.ENV = 'live';
+if (/^test\./.test(host) || (TEST.FIREBASE.projectId && serverProject === TEST.FIREBASE.projectId)) Object.assign(CONFIG, TEST);
+export const IS_TEST = CONFIG.ENV === 'test';
+
 export function resolveMode() {
   const q = new URLSearchParams(location.search).get('mode');
   if (q === 'demo' || q === 'firebase') { sessionStorage.setItem('nuqta_mode', q); return q; }

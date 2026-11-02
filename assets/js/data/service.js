@@ -399,8 +399,97 @@ export function createService({ db, auth, mode }) {
     },
     async getCard(token) {
       const card = await db.get(P.card(token)); if (!card || card.deleted) return null;
-      const [business, rewards] = await Promise.all([S.getBusiness(card.businessId), S.listRewards(card.businessId)]);
-      return { card, business, rewards: rewards.filter((r) => L.rewardIsLive(r)) };
+      const [business, rewards, platform] = await Promise.all([S.getBusiness(card.businessId), S.listRewards(card.businessId), db.get('platform/settings').catch(() => null)]);
+      return { card, business, rewards: rewards.filter((r) => L.rewardIsLive(r)), ordering: L.orderingOn(platform, business) };
+    },
+
+    // ── Online ordering (pilot; off unless the admin switches it on) ──
+    async listMenu(bid) { return (await db.list(P.sub(bid, 'menu'))).sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.order || 0) - (b.order || 0) || (a.name || '').localeCompare(b.name || '')); },
+    async saveMenuItem(bid, m) {
+      await need(bid, 'menu'); const id = m.id || db.newId();
+      await db.set(P.sub(bid, 'menu', id), {
+        name: L.clampStr(m.name, 60), nameAr: L.clampStr(m.nameAr, 60), description: L.clampStr(m.description, 200), category: L.clampStr(m.category, 40),
+        price: Math.max(0, Number(L.parseAmount(m.price)) || 0), image: m.image || null, available: m.available !== false, order: Number(m.order) || 0, updatedAt: now(),
+      });
+      return id;
+    },
+    async deleteMenuItem(bid, id) { await need(bid, 'menu'); await db.remove(P.sub(bid, 'menu', id)); },
+    async setOrderSettings(bid, patch) {
+      await need(bid, 'menu');
+      const cur = (await db.get(P.biz(bid)))?.orderSettings || {};
+      await db.update(P.biz(bid), { orderSettings: { ...cur, ...('paused' in patch ? { paused: !!patch.paused } : {}), ...('stampPer' in patch ? { stampPer: patch.stampPer === 'item' ? 'item' : 'order' } : {}) } });
+    },
+    // A customer orders from their card (no login: the secret card link is their identity).
+    async placeOrder(token, { items, note, pickup }) {
+      const card = await db.get(P.card(token)); if (!card || card.deleted) fail('not-found');
+      const bid = card.businessId;
+      const [b, menu, mine, platform] = await Promise.all([S.getBusiness(bid), S.listMenu(bid), db.list(`cards/${token}/orders`), db.get('platform/settings').catch(() => null)]);
+      if (!L.orderingOn(platform, b)) fail('ordering-off');
+      if (b.orderSettings?.paused) fail('ordering-paused');
+      if (!L.canOperate(b)) fail('subscription-ended');
+      if (mine.filter((o) => L.ORDER_OPEN.includes(o.status)).length >= L.MAX_OPEN_ORDERS) fail('too-many-orders');
+      const priced = L.priceOrder(items, menu);
+      if (!priced.lines.length) fail('empty-order');
+      const id = db.newId(); const t = now();
+      const code = L.randomString(3, 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789');
+      const order = { businessId: bid, customerId: card.customerId, cardToken: token, firstName: card.firstName || '', memberNumber: card.memberNumber || '',
+        code, items: priced.lines, total: priced.total, count: priced.count, note: L.clampStr(note, 200), pickup: L.clampStr(pickup, 40), status: 'new', createdAt: t, updatedAt: t };
+      await db.batch([
+        { op: 'set', path: P.sub(bid, 'orders', id), data: order },
+        { op: 'set', path: `cards/${token}/orders/${id}`, data: { businessId: bid, code, items: priced.lines, total: priced.total, count: priced.count, note: order.note, pickup: order.pickup, status: 'new', createdAt: t, updatedAt: t } },
+      ]);
+      return { id, code, total: priced.total };
+    },
+    async cancelMyOrder(token, id) {
+      const o = await db.get(`cards/${token}/orders/${id}`); if (!o) fail('not-found');
+      if (o.status !== 'new') fail('order-in-progress');
+      const t = now();
+      await db.batch([
+        { op: 'update', path: `cards/${token}/orders/${id}`, data: { status: 'cancelled', updatedAt: t } },
+        { op: 'update', path: P.sub(o.businessId, 'orders', id), data: { status: 'cancelled', updatedAt: t } },
+      ]);
+    },
+    watchMyOrders(token, onData) { return db.watch(`cards/${token}/orders`, { orderBy: ['createdAt', 'desc'], limit: 10 }, onData); },
+    async watchOrders(bid, onData) { await need(bid, 'orders'); return db.watch(P.sub(bid, 'orders'), { where: [['createdAt', '>=', now() - 2 * L.DAY]], orderBy: ['createdAt', 'desc'] }, onData); },
+    // Staff move an order along. "Collected" records the purchase, so points/stamps follow the business's own program.
+    async setOrderStatus(bid, id, status, { reason } = {}) {
+      await need(bid, 'orders');
+      if (!['accepted', 'ready', 'collected', 'declined'].includes(status)) fail('invalid');
+      const o = await db.get(P.sub(bid, 'orders', id)); if (!o) fail('not-found');
+      const flow = { accepted: ['new'], ready: ['new', 'accepted'], collected: ['accepted', 'ready'], declined: ['new', 'accepted'] };
+      if (!flow[status].includes(o.status)) fail('order-moved', { status: o.status });
+      const t = now(); const patch = { status, updatedAt: t, ...(status === 'declined' ? { reason: L.clampStr(reason, 120) } : {}) };
+      let earned = null;
+      if (status === 'collected') {
+        const b = await S.getBusiness(bid);
+        const qty = b.orderSettings?.stampPer === 'item' ? o.count || 1 : 1;
+        const r = await S.recordPurchase(bid, { customerId: o.customerId, amount: o.total, qty });
+        patch.activityId = r.id; earned = r.earned;
+      }
+      await db.batch([
+        { op: 'update', path: P.sub(bid, 'orders', id), data: { ...patch, by: user()?.uid || null } },
+        { op: 'update', path: `cards/${o.cardToken}/orders/${id}`, data: patch },
+      ]);
+      if (status === 'ready') S._orderReadyPing(bid, id);
+      return { earned };
+    },
+    // Google Wallet "your order is ready" notification (server function; quietly skipped where wallets are off).
+    async _orderReadyPing(bid, id) {
+      const base = mode === 'firebase' && walletFnUrl() ? walletBase() : ''; if (!base) return;
+      try { const token = await auth.idToken?.(); await fetch(`${base}/order-ready`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ bid, oid: id }) }); } catch { /* best effort */ }
+    },
+    // Admin switches for the pilot.
+    async adminSetFeature(bid, key, on) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      if (key !== 'ordering') fail('invalid');
+      const b = await db.get(P.biz(bid)); if (!b) fail('not-found');
+      await db.update(P.biz(bid), { features: { ...(b.features || {}), [key]: !!on } });
+      walletPing('b=' + encodeURIComponent(bid));
+    },
+    async adminSetPlatformFeature(key, on) {
+      if (!(await S.isPlatformAdmin())) fail('permission-denied');
+      const s = (await db.get('platform/settings')) || {};
+      await db.set('platform/settings', { features: { ...(s.features || {}), [key]: !!on } }, { merge: true });
     },
     async listCardActivity(token) { return db.list(`cards/${token}/activity`, { orderBy: ['at', 'desc'], limit: 50 }); },
     async listCardRedemptions(token) { return db.list(`cards/${token}/redemptions`, { orderBy: ['createdAt', 'desc'], limit: 20 }); },
@@ -701,6 +790,7 @@ export function createService({ db, auth, mode }) {
         signupsOpen: s.signupsOpen !== false, announcement: s.announcement || '', trialDays: s.trialDays || L.DEFAULT_TRIAL_DAYS,
         currency: s.currency || 'USD', prices: { basic: s.prices?.basic ?? s.prices?.starter ?? 15, enterprise: s.prices?.enterprise ?? 30 },
         paymentInfo: s.paymentInfo || '', supportWhatsapp: s.supportWhatsapp || '',
+        features: { ordering: !!s.features?.ordering },
       };
     },
     async adminSettings() { return S.platformSettings(); },
@@ -708,6 +798,7 @@ export function createService({ db, auth, mode }) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
       const prices = {}; for (const p of L.PAID_PLANS) prices[p] = Math.max(0, Number(s.prices?.[p]) || 0);
       await db.set('platform/settings', {
+        features: { ordering: !!s.features?.ordering },
         signupsOpen: !!s.signupsOpen, announcement: L.clampStr(s.announcement, 300),
         trialDays: Math.min(365, Math.max(1, Math.trunc(Number(s.trialDays) || L.DEFAULT_TRIAL_DAYS))),
         currency: L.clampStr(s.currency || 'USD', 6), prices,

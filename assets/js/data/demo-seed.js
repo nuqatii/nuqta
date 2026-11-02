@@ -130,6 +130,8 @@ export async function seedDemo(db, auth) {
   for (const [i, ago] of [[0, 160], [1, 100], [2, 40]].map(([i, d]) => [i, d])) {
     set(`businesses/${bid}/payments/pay${i}`, { businessId: bid, months: 2, plan: 'starter', amount: 30, currency: 'USD', method: 'Sham Cash', note: '', periodEnd: NOW - ago * DAY + 60 * DAY, at: NOW - ago * DAY, by: DEMO_ACCOUNTS.admin.email });
   }
+  [['m1', 'Margherita', 'مارغريتا', 2500, 'Pizza'], ['m2', 'Pepperoni', 'بيبروني', 3200, 'Pizza'], ['m3', 'Garlic bread', 'خبز بالثوم', 900, 'Sides'], ['m4', 'Lemon mint', 'ليمون ونعنع', 700, 'Drinks']]
+    .forEach(([id, name, nameAr, price, category], i) => set(`businesses/${bid}/menu/${id}`, { name, nameAr, price, category, description: '', image: null, available: true, order: i, updatedAt: NOW }));
   const roles = { owner: 'owner', manager: 'manager', staff: 'staff', marketing: 'marketing' };
   for (const [k, role] of Object.entries(roles)) {
     const a = DEMO_ACCOUNTS[k];

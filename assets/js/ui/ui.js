@@ -1,6 +1,12 @@
 // Small UI toolkit: escaping, icons, toasts, dialogs, QR/barcodes, charts, files.
 import { t, lang } from '../core/i18n.js';
 import { ICON_PATHS } from './icons.js';
+import { IS_TEST } from '../config.js';
+
+// Test site (test.nuqatii.com): a red bar on every page so nobody mistakes it for the real nuqatii.
+if (IS_TEST && globalThis.document?.body && !document.querySelector('.test-bar')) {
+  const bar = document.createElement('div'); bar.className = 'test-bar'; bar.textContent = t('test_banner'); document.body.prepend(bar);
+}
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (sel, root = document) => root.querySelector(sel);

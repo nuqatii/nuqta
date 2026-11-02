@@ -230,3 +230,25 @@ test('receipt email: platform admin only, goes to the owner, marks the payment a
   assert.match(body.html, /Urban Coffee/); assert.match(body.html, /\$45/); assert.match(body.html, /Basic plan/);
   assert.equal(docs['businesses/urban01/payments/pay1'].emailedTo, 'karim@urban.test');
 });
+
+test('ordering pilot: pass gets an "Order ahead" link only when switched on; order-ready notifies staff-only', async () => {
+  const L = await import('../functions/shared/loyalty.js');
+  const plain = buildObject({ issuerId: ISS, token: TOKEN, card: CARD, business: BIZ, rewards: REWARDS, siteUrl: 'https://nuqatii.com/' });
+  assert.deepEqual(plain.linksModuleData.uris.map((u) => u.id), ['card']);
+  const withOrder = buildObject({ issuerId: ISS, token: TOKEN, card: CARD, business: BIZ, rewards: REWARDS, siteUrl: 'https://nuqatii.com/', ordering: true });
+  assert.equal(withOrder.linksModuleData.uris[0].uri, `https://nuqatii.com/rewards.html?c=${TOKEN}#order`);
+  const docs = {
+    'businesses/urban01': { ...BIZ, lang: 'ar' }, 'businesses/urban01/members/u_staff': { role: 'staff' }, 'businesses/urban01/members/u_mkt': { role: 'marketing' },
+    'businesses/urban01/orders/ord1': { status: 'ready', code: 'K7P', cardToken: TOKEN },
+    [`cards/${TOKEN}`]: { ...CARD, walletGoogle: true },
+  };
+  const sent = [];
+  const g = { async addMessage(id, msg, notify) { sent.push([id, msg.header, notify]); return 'sent'; } };
+  const h = createHandler({ firestore: fakeFirestore(docs), google: g, config: CFG, L, verifyToken: async (t) => ({ uid: t }) });
+  const post = async (auth, body) => { const res = fakeRes(); await h({ method: 'POST', path: '/gwallet/order-ready', query: {}, body, headers: auth ? { authorization: 'Bearer ' + auth } : {} }, res); return res; };
+  assert.equal((await post(null, { bid: 'urban01', oid: 'ord1' })).statusCode, 401);
+  assert.equal((await post('u_mkt', { bid: 'urban01', oid: 'ord1' })).statusCode, 403);
+  const ok = await post('u_staff', { bid: 'urban01', oid: 'ord1' });
+  assert.equal(ok.statusCode, 200); assert.equal(ok.body.sent, true);
+  assert.match(sent[0][1], /K7P/); assert.equal(sent[0][2], true);
+});

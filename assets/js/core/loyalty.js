@@ -11,12 +11,30 @@ export const CAMPAIGN_CHANNELS = [...CHANNELS, 'gwallet'];
 
 // What each role may open. Mirrored server-side in firestore.rules.
 export const PERMISSIONS = {
-  owner:     ['billing', 'dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'designer', 'crm', 'campaigns', 'analytics', 'reports', 'locations', 'staff', 'settings', 'qr'],
-  manager:   ['dashboard', 'checkout', 'customers', 'transactions', 'rewards', 'program', 'crm', 'analytics', 'reports', 'locations', 'qr'],
-  staff:     ['checkout', 'customers', 'transactions'],
+  owner:     ['billing', 'dashboard', 'checkout', 'orders', 'menu', 'customers', 'transactions', 'rewards', 'program', 'designer', 'crm', 'campaigns', 'analytics', 'reports', 'locations', 'staff', 'settings', 'qr'],
+  manager:   ['dashboard', 'checkout', 'orders', 'menu', 'customers', 'transactions', 'rewards', 'program', 'crm', 'analytics', 'reports', 'locations', 'qr'],
+  staff:     ['checkout', 'orders', 'customers', 'transactions'],
   marketing: ['dashboard', 'customers', 'crm', 'campaigns', 'analytics', 'qr'],
 };
 export const can = (role, area) => !!PERMISSIONS[role]?.includes(area);
+
+// ── Online ordering (pilot) ─────────────────────────────
+// On only when the platform admin has switched it on for the platform AND for this business.
+export const orderingOn = (platform, b) => !!(platform?.features?.ordering && b?.features?.ordering);
+export const ORDER_OPEN = ['new', 'accepted', 'ready'];          // still in progress
+export const ORDER_STATUSES = ['new', 'accepted', 'ready', 'collected', 'declined', 'cancelled'];
+export const MAX_OPEN_ORDERS = 3;                                // per card at a time
+// Prices always come from the menu, never from what the phone sent.
+export function priceOrder(items, menu) {
+  const byId = new Map((menu || []).map((m) => [m.id, m]));
+  const lines = [];
+  for (const it of items || []) {
+    const m = byId.get(it.id); const qty = Math.min(20, Math.max(1, Math.trunc(Number(it.qty) || 1)));
+    if (!m || m.available === false) continue;
+    lines.push({ id: m.id, name: String(m.name || '').slice(0, 60), nameAr: String(m.nameAr || '').slice(0, 60), price: Math.max(0, Number(m.price) || 0), qty, note: String(it.note || '').trim().slice(0, 120) });
+  }
+  return { lines, total: round2(lines.reduce((s, l) => s + l.price * l.qty, 0)), count: lines.reduce((s, l) => s + l.qty, 0) };
+}
 
 // ── Subscription ────────────────────────────────────────
 // A business runs on a free trial, then on paid time that the platform admin adds.
