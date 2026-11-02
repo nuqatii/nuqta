@@ -72,6 +72,18 @@ jobs:
             echo "Email key not set - skipping"
           fi
 
+      - name: Notification key (only if set up)
+        if: steps.key.outputs.ok == 'true'
+        env:
+          VAPID_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: |
+          if [ -n "$VAPID_KEY" ]; then
+            printf 'VAPID_PRIVATE_KEY=%s\n' "$VAPID_KEY" >> functions/.env
+            echo "Notification key added"
+          else
+            echo "Notification key not set - skipping"
+          fi
+
       - name: Install function packages
         if: steps.key.outputs.ok == 'true'
         run: npm install --prefix functions --no-audit --no-fund
