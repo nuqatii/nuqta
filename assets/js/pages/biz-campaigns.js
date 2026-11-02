@@ -44,7 +44,7 @@ export default async function campaigns(ctx, el) {
     const preSeg = sessionStorage.getItem('nuqta_new_campaign_seg'); sessionStorage.removeItem('nuqta_new_campaign_seg');
     const c = camp ? { ...camp } : { name: '', segment: preSeg || 'auto_at_risk', channel: 'whatsapp', message: lang === 'ar' ? 'أهلاً {{first_name}}! ' : 'Hi {{first_name}}! ' };
     const group = () => segmentMembers(c.segment, customers, b.tiers, custom).filter((x) => x.marketingConsent);
-    const audience = () => (c.channel === 'gwallet' ? group().filter((x) => x.walletGoogle) : group());
+    const audience = () => (c.channel === 'gwallet' ? group().filter((x) => x.walletGoogle || x.walletApple) : group());
     const html = `<div class="form">
       <label class="field"><span>${t('cp_name')}</span><input class="input" id="cn" value="${esc(c.name)}" maxlength="80" autofocus></label>
       <div class="grid2"><label class="field"><span>${t('cp_segment')}</span><select class="input" id="cs">${segmentOptions(custom).map((g) => `<optgroup label="${esc(g.group)}">${g.items.map((i) => `<option value="${i.key}" ${i.key === c.segment ? 'selected' : ''}>${esc(i.label)}</option>`).join('')}</optgroup>`).join('')}</select></label>
@@ -95,6 +95,7 @@ export default async function campaigns(ctx, el) {
   function walletResult(name, r) {
     modal({ title: name, body: `<ul class="list">
       <li><span class="grow"><span class="t">${t('gw_res_sent')}</span></span><b>${fmtNum(r.sent)}</b></li>
+      ${r.apple ? `<li><span class="grow"><span class="t">${t('gw_res_apple')}</span></span><b>${fmtNum(r.apple)}</b></li>` : ''}
       ${r.silent ? `<li><span class="grow"><span class="t">${t('gw_res_silent')}</span></span><b>${fmtNum(r.silent)}</b></li>` : ''}
       ${r.notInWallet ? `<li><span class="grow"><span class="t">${t('gw_res_missing')}</span></span><b>${fmtNum(r.notInWallet)}</b></li>` : ''}
       ${r.failed ? `<li><span class="grow"><span class="t">${t('gw_res_failed')}</span></span><b>${fmtNum(r.failed)}</b></li>` : ''}</ul>`,

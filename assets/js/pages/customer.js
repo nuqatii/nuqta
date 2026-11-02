@@ -135,7 +135,7 @@ async function cardApp(token) {
   let tab = location.hash.slice(1) || 'card';
   let acts = null, reds = null;
   // Ordering (pilot): the menu, what's in the basket, and this card's orders (live).
-  let menu = null; const cart = new Map(); let myOrders = []; let unsubOrders = null; const lastStatus = new Map();
+  let menu = null; const cart = new Map(); let myOrders = []; let pastOpen = false; let unsubOrders = null; const lastStatus = new Map();
   if (tab === 'order' && !data.ordering) tab = 'card';
   const welcome = qs.get('welcome') === '1';
   if (welcome) history.replaceState(null, '', `rewards.html?c=${token}`);
@@ -251,17 +251,21 @@ async function cardApp(token) {
   }
   async function orderTab() {
     if (!menu) menu = await S.listMenu(b.id);
-    const open = myOrders.filter((o) => ORDER_OPEN.includes(o.status) || (Date.now() - (o.updatedAt || 0) < 3600e3 && o.status !== 'cancelled'));
+    // Only orders still in progress sit above the menu; finished ones fold away at the bottom.
+    const open = myOrders.filter((o) => ORDER_OPEN.includes(o.status));
+    const past = myOrders.filter((o) => !ORDER_OPEN.includes(o.status)).sort((a, c) => (c.updatedAt || c.createdAt || 0) - (a.updatedAt || a.createdAt || 0)).slice(0, 10);
     const paused = b.orderSettings?.paused;
     const cats = [...new Set(menu.map((m) => m.category || ''))];
     const priced = priceOrder([...cart].map(([id, qty]) => ({ id, qty })), menu);
     const row = (m) => { const q = cart.get(m.id) || 0; const off = m.available === false;
       return `<div class="menu-row ${off ? 'off' : ''}">${m.image ? `<img src="${esc(m.image)}" alt="">` : ''}<div class="grow" style="flex:1;min-width:0"><b>${esc(itemName(m))}</b>${m.description ? `<div class="small muted">${esc(m.description)}</div>` : ''}<div class="small"><b>${money(m.price)}</b>${off ? ` · <span class="muted">${t('o_sold_out')}</span>` : ''}</div></div>
         ${off || paused ? '' : q ? `<div class="qty"><button data-dec="${esc(m.id)}" aria-label="−">−</button><b>${fmtNum(q)}</b><button data-inc="${esc(m.id)}" aria-label="+">+</button></div>` : `<button class="btn sm" data-inc="${esc(m.id)}">${icon('plus')}${t('o_add')}</button>`}</div>`; };
-    return `${open.length ? `<h2>${t('o_my_orders')}</h2>${open.map(orderCard).join('')}` : ''}
+    const pastRow = (o) => `<li><span class="grow"><span class="t">${t('o_order')} <span class="ltr">#${esc(o.code)}</span> · ${money(o.total)}</span><span class="s">${o.items.map((l) => `${fmtNum(l.qty)}× ${esc(itemName(l))}`).join(' · ')} · ${ago(o.updatedAt || o.createdAt)}</span></span><span class="chip ${o.status === 'collected' ? 'ok' : 'bad'}">${t('o_st_' + o.status)}</span></li>`;
+    return `${open.length ? `<h2>${t('o_active')}</h2>${open.map(orderCard).join('')}` : ''}
       <h2>${t('o_menu')}</h2>
       ${paused ? `<div class="note">${icon('clock')}<span>${t('o_paused')}</span></div>` : `<p class="small muted" style="margin-top:-6px">${t('o_how')}</p>`}
       ${menu.length ? cats.map((c) => `${c ? `<h3 class="menu-cat">${esc(c)}</h3>` : ''}${menu.filter((m) => (m.category || '') === c).map(row).join('')}`).join('') : `<p class="muted">${t('o_no_menu')}</p>`}
+      ${past.length ? `<details class="panel past-orders" id="pastOrders" ${pastOpen ? 'open' : ''}><summary class="panel-b"><b>${t('o_past')}</b> <span class="muted small">(${fmtNum(past.length)})</span></summary><ul class="list">${past.map(pastRow).join('')}</ul></details>` : ''}
       ${priced.count && !paused ? `<div class="basket-bar"><button class="btn primary lg block" id="basket">${icon('bag')}${t('o_view_basket', { n: fmtNum(priced.count) })} · ${money(priced.total)}</button></div>` : ''}`;
   }
   function basketDialog() {
@@ -301,6 +305,7 @@ async function cardApp(token) {
     if (data.ordering) watchOrders();
     const inner = tab === 'rewards' ? rewardsTab() : tab === 'activity' ? await activityTab() : tab === 'profile' ? profileTab() : tab === 'order' && data.ordering ? await orderTab() : cardTab();
     shell(inner);
+    const po = root.querySelector('#pastOrders'); if (po) po.ontoggle = () => { pastOpen = po.open; };
     root.querySelectorAll('[data-inc]').forEach((x) => (x.onclick = () => { cart.set(x.dataset.inc, Math.min(20, (cart.get(x.dataset.inc) || 0) + 1)); render(); }));
     root.querySelectorAll('[data-dec]').forEach((x) => (x.onclick = () => { const q = (cart.get(x.dataset.dec) || 0) - 1; if (q > 0) cart.set(x.dataset.dec, q); else cart.delete(x.dataset.dec); render(); }));
     $('#basket')?.addEventListener('click', basketDialog);

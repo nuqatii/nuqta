@@ -642,13 +642,13 @@ export function createService({ db, auth, mode }) {
       await need(bid, 'campaigns');
       if (mode === 'demo') {   // the demo has no Google account: pretend every pass received it
         await db.update(P.sub(bid, 'campaigns', campaignId), { status: 'sent', sentAt: now(), walletSent: items.length, walletSilent: 0 });
-        return { sent: items.length, silent: 0, notInWallet: 0, failed: 0 };
+        return { sent: items.length, silent: 0, apple: 0, notInWallet: 0, failed: 0 };
       }
-      const base = mode === 'firebase' ? walletFnUrl() : '';
+      const base = mode === 'firebase' && (walletFnUrl() || appleFnUrl()) ? walletBase() : '';
       if (!base) fail('wallet-off');
       const token = await auth.idToken?.();
       if (!token) fail('unauthenticated');
-      const total = { sent: 0, silent: 0, notInWallet: 0, failed: 0 };
+      const total = { sent: 0, silent: 0, apple: 0, notInWallet: 0, failed: 0 };
       for (let i = 0; i < items.length; i += 200) {
         const r = await fetch(`${base}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ bid, campaignId, items: items.slice(i, i + 200), days }) });
         const j = await r.json().catch(() => ({}));

@@ -196,7 +196,7 @@ test('campaign messages: only signed-in marketers, only wallet holders, quota fa
   assert.equal((await post('u_stranger', { bid: 'urban01', items })).statusCode, 403);
   const ok = await post('u_owner', { bid: 'urban01', campaignId: 'camp1', items });
   assert.equal(ok.statusCode, 200);
-  assert.deepEqual(ok.body, { sent: 1, silent: 1, notInWallet: 1, failed: 0 });
+  assert.deepEqual(ok.body, { sent: 1, silent: 1, apple: 0, notInWallet: 1, failed: 0 });
   assert.equal(sent.length, 2);
   assert.equal(sent[0][2], 'Double stamps');
   assert.equal(docs['businesses/urban01/campaigns/camp1'].status, 'sent');
@@ -282,4 +282,26 @@ test('order ready: instant phone notification (web push) to every saved device, 
   assert.equal(delivered[0][1].title, 'Order #Q2M is ready ☕');
   assert.match(delivered[0][1].url, new RegExp(`rewards\\.html\\?c=${TOKEN}#order$`));
   assert.equal(createWebPush({ publicKey: 'PUB', privateKey: '' }).enabled(), false);   // off until the secret exists
+});
+
+test('campaign messages reach Apple Wallet too: the pass "Messages" line changes and the iPhone is pushed', async () => {
+  const L = await import('../functions/shared/loyalty.js');
+  const docs = {
+    'businesses/urban01': { ...BIZ, status: 'active', trialEndsAt: Date.now() + 9e9 }, 'businesses/urban01/members/u_owner': { role: 'owner' },
+    'businesses/urban01/customers/c1': { walletApple: true, cardToken: TOKEN },
+    [`cards/${TOKEN}`]: { ...CARD, walletApple: true },
+  };
+  const touched = [];
+  const apple = { enabled: () => true, touch: async (tok) => { touched.push(tok); return 1; } };
+  const h = createHandler({ firestore: fakeFirestore(docs), google: { addMessage: async () => 'sent' }, config: { ...CFG, GOOGLE_WALLET: { issuerId: '', region: 'europe-west1' } }, L, apple, verifyToken: async (t) => ({ uid: t }) });
+  const res = fakeRes();
+  await h({ method: 'POST', path: '/gwallet/message', query: {}, body: { bid: 'urban01', items: [{ customerId: 'c1', header: 'Urban Coffee', body: 'Double stamps today!' }] }, headers: { authorization: 'Bearer u_owner' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { sent: 0, silent: 0, apple: 1, notInWallet: 0, failed: 0 });
+  assert.equal(docs[`cards/${TOKEN}`].walletMsg.text, 'Urban Coffee — Double stamps today!');
+  assert.deepEqual(touched, [TOKEN]);
+  const { buildPassJson } = await import('../functions/apple.js');
+  const pj = buildPassJson({ config: { APPLE_WALLET: { passTypeId: 'p', teamId: 't' } }, token: TOKEN, card: docs[`cards/${TOKEN}`], business: BIZ, rewards: [], siteUrl: 'https://nuqatii.com/', webServiceURL: 'https://x' });
+  const news = pj.storeCard.backFields.find((f) => f.key === 'news');
+  assert.equal(news.value, 'Urban Coffee — Double stamps today!'); assert.equal(news.changeMessage, '%@');
 });

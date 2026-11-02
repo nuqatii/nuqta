@@ -16,8 +16,8 @@ import { stampsSvg } from './stamps.js';
 const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 const SAFE = /^[A-Za-z0-9._-]{1,128}$/;
 const TXT = {
-  en: { points: 'Points', stamps: 'Stamps', visits: 'Visits', spend: 'Spent', ready: 'Rewards ready', tier: 'Tier', member: 'Member', number: 'Member no.', open: 'Open my card', chg: 'Updated: %@', readyChg: 'Rewards ready: %@', desc: 'loyalty card' },
-  ar: { points: 'النقاط', stamps: 'الأختام', visits: 'الزيارات', spend: 'الإنفاق', ready: 'مكافآت جاهزة', tier: 'المستوى', member: 'العضو', number: 'رقم العضوية', open: 'افتح بطاقتي', chg: 'تحديث: %@', readyChg: 'مكافآت جاهزة: %@', desc: 'بطاقة ولاء' },
+  en: { points: 'Points', stamps: 'Stamps', visits: 'Visits', spend: 'Spent', ready: 'Rewards ready', tier: 'Tier', member: 'Member', number: 'Member no.', open: 'Open my card', chg: 'Updated: %@', readyChg: 'Rewards ready: %@', desc: 'loyalty card', order: 'Order ahead', orderStatus: 'Your order', none: 'No order in progress', news: 'Messages', noNews: 'No messages yet' },
+  ar: { points: 'النقاط', stamps: 'الأختام', visits: 'الزيارات', spend: 'الإنفاق', ready: 'مكافآت جاهزة', tier: 'المستوى', member: 'العضو', number: 'رقم العضوية', open: 'افتح بطاقتي', chg: 'تحديث: %@', readyChg: 'مكافآت جاهزة: %@', desc: 'بطاقة ولاء', order: 'اطلب مسبقاً', orderStatus: 'طلبك', none: 'لا يوجد طلب قيد التنفيذ', news: 'رسائل', noNews: 'لا توجد رسائل بعد' },
 };
 const hex = (c, f) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : f);
 const rgb = (h) => `rgb(${parseInt(h.slice(1, 3), 16)}, ${parseInt(h.slice(3, 5), 16)}, ${parseInt(h.slice(5, 7), 16)})`;
@@ -33,7 +33,7 @@ export function loadAppleCerts({ env = process.env, wwdr } = {}) {
 }
 
 // ── Pass contents (pure) ────────────────────────────────
-export function buildPassJson({ config, token, card, business, rewards, siteUrl, webServiceURL, locations = [] }) {
+export function buildPassJson({ config, token, card, business, rewards, siteUrl, webServiceURL, locations = [], ordering = false, now = Date.now() }) {
   const A = config.APPLE_WALLET;
   const main = business.lang === 'en' ? 'en' : 'ar';
   const T = TXT[main];
@@ -60,6 +60,16 @@ export function buildPassJson({ config, token, card, business, rewards, siteUrl,
     s.secondaryFields.push(name);
   }
   if (tier) s.auxiliaryFields.push({ key: 'tier', label: T.tier, value: main === 'ar' ? tier.nameAr || tier.name : tier.name });
+  // Online ordering (pilot): an "Order ahead" link, and a "Your order" line whose change makes the iPhone show
+  // a notification ("Order #K7P is ready ☕"). The line keeps its last message until the next one, because
+  // every change of it shows as a notification on the iPhone.
+  if (ordering && !card.deleted) {
+    s.backFields.push({ key: 'orderStatus', label: T.orderStatus, value: card.orderMsg?.text ? String(card.orderMsg.text).slice(0, 140) : T.none, changeMessage: '%@' });
+    s.backFields.push({ key: 'order', label: T.order, value: `${siteUrl}rewards.html?c=${token}#order` });
+  }
+  // Campaign messages: the latest one. Like the order line, it stays until the next message, because every change
+  // of it shows as a notification on the iPhone.
+  if (!card.deleted) s.backFields.unshift({ key: 'news', label: T.news, value: card.walletMsg?.text ? String(card.walletMsg.text).slice(0, 500) : T.noNews, changeMessage: '%@' });
   s.backFields.push({ key: 'num', label: T.number, value: String(card.memberNumber || '') });
   if (!card.deleted) s.backFields.push({ key: 'link', label: T.open, value: `${siteUrl}rewards.html?c=${token}` });
 
@@ -152,7 +162,8 @@ export function createApple({ firestore, config, certs, push, now = () => Date.n
     const card = await get(`cards/${token}`); if (!card) return null;
     const business = await get(`businesses/${card.businessId}`); if (!business) return null;
     const locations = (await firestore.collection(`businesses/${card.businessId}/locations`).get()).docs.map((x) => x.data());
-    return { token, card, business, rewards: await rewardsOf(card.businessId), locations };
+    const ordering = !!(business.features?.ordering && (await get('platform/settings'))?.features?.ordering);
+    return { token, card, business, rewards: await rewardsOf(card.businessId), locations, ordering };
   }
   async function pkpassFor(d) {
     const passJson = buildPassJson({ config, ...d, siteUrl, webServiceURL: webServiceURL() });

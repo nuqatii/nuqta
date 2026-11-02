@@ -129,3 +129,20 @@ test('Apple stays off until configured', async () => {
   const out = res(); await apple.route(req('GET', '/pass', { query: { t: TOKEN } }), out, '/pass');
   assert.equal(out.statusCode, 503);
 });
+
+test('ordering pilot on Apple Wallet: "Order ahead" link + a "Your order" line that notifies when it changes', async () => {
+  const { buildPassJson } = await import('../functions/apple.js');
+  const base = { config: CONFIG, token: 'tok12345678901234567890ab', business: { name: 'Crepy', lang: 'ar', program: { type: 'stamps', goal: 8 } }, rewards: [], siteUrl: 'https://nuqatii.com/', webServiceURL: 'https://x/apple' };
+  const card = { businessId: 'b1', customerId: 'c1', points: 3, firstName: 'أمجد', memberNumber: '100001' };
+  const off = buildPassJson({ ...base, card });
+  assert.equal(off.storeCard.backFields.some((f) => f.key === 'order'), false);
+  const now = Date.UTC(2026, 10, 3, 12);
+  const idle = buildPassJson({ ...base, card, ordering: true, now });
+  const status = idle.storeCard.backFields.find((f) => f.key === 'orderStatus');
+  assert.equal(status.changeMessage, '%@'); assert.equal(status.value, 'لا يوجد طلب قيد التنفيذ');
+  assert.equal(idle.storeCard.backFields.find((f) => f.key === 'order').value, 'https://nuqatii.com/rewards.html?c=tok12345678901234567890ab#order');
+  const ready = buildPassJson({ ...base, card: { ...card, orderMsg: { text: '#K7P جاهز ☕', at: now - 60000 } }, ordering: true, now });
+  assert.equal(ready.storeCard.backFields.find((f) => f.key === 'orderStatus').value, '#K7P جاهز ☕');
+  const later = buildPassJson({ ...base, card: { ...card, orderMsg: { text: '#K7P جاهز ☕', at: now - 2 * 86400000 } }, ordering: true, now });
+  assert.equal(later.storeCard.backFields.find((f) => f.key === 'orderStatus').value, '#K7P جاهز ☕');   // no surprise "no order" alert later
+});

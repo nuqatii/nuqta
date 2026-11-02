@@ -119,7 +119,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     const business = await get(`businesses/${bid}`);
     if (!business || (L && !L.canOperate(business))) return res.status(403).json({ error: 'subscription-ended' });
     const iss = issuerId(); const stamp = Date.now();
-    const out = { sent: 0, silent: 0, notInWallet: 0, failed: 0 };
+    const out = { sent: 0, silent: 0, apple: 0, notInWallet: 0, failed: 0 };
     const clip = (v, n) => String(v || '').trim().slice(0, n);
     let i = 0;
     async function worker() {
@@ -128,17 +128,27 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
         try {
           const cid = String(it.customerId || '');
           const c = /^[A-Za-z0-9_-]{1,80}$/.test(cid) ? await get(`businesses/${bid}/customers/${cid}`) : null;
-          if (!c || !c.walletGoogle || !c.cardToken) { out.notInWallet++; continue; }
+          const useApple = !!(c?.walletApple && apple?.enabled()); const useGoogle = !!(c?.walletGoogle && iss);
+          if (!c || !c.cardToken || (!useApple && !useGoogle)) { out.notInWallet++; continue; }
           const card = await get(`cards/${c.cardToken}`);
           if (!card || card.deleted) { out.notInWallet++; continue; }
-          const r = await google.addMessage(objectIdFor(iss, card), { id: `m${stamp}_${cid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60), header: clip(it.header, 60), body: clip(it.body, 500), displayInterval: messageWindow(days, stamp) }, true);
-          if (r === 'missing') out.notInWallet++; else out[r]++;
+          let reached = false;
+          if (useGoogle) {
+            const r = await google.addMessage(objectIdFor(iss, card), { id: `m${stamp}_${cid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60), header: clip(it.header, 60), body: clip(it.body, 500), displayInterval: messageWindow(days, stamp) }, true);
+            if (r !== 'missing') { out[r]++; reached = true; }
+          }
+          if (useApple && card.walletApple) {   // Apple: change the pass's "Messages" line; the iPhone shows it as a notification
+            const head = clip(it.header, 60); const text = `${head ? head + ' — ' : ''}${clip(it.body, 440)}`;
+            await firestore.doc(`cards/${c.cardToken}`).set({ walletMsg: { text, at: stamp } }, { merge: true });
+            if ((await apple.touch(c.cardToken, card)) > 0) { out.apple++; reached = true; }
+          }
+          if (!reached) out.notInWallet++;
         } catch (e) { out.failed++; console.error('message', e.message); }
       }
     }
     await Promise.all(Array.from({ length: 8 }, worker));
     if (campaignId && /^[A-Za-z0-9_-]{4,64}$/.test(String(campaignId))) {
-      await firestore.doc(`businesses/${bid}/campaigns/${campaignId}`).set({ status: 'sent', sentAt: Date.now(), walletSent: out.sent, walletSilent: out.silent }, { merge: true }).catch(() => {});
+      await firestore.doc(`businesses/${bid}/campaigns/${campaignId}`).set({ status: 'sent', sentAt: Date.now(), walletSent: out.sent + out.apple, walletSilent: out.silent }, { merge: true }).catch(() => {});
     }
     res.status(200).json(out);
   }
@@ -197,15 +207,22 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
       pushed = r1.sent;
       await Promise.all(r1.gone.map((id) => firestore.doc(`cards/${o.cardToken}/push/${id}`).delete?.().catch(() => {})));
     }
-    // 2) A message on the Google Wallet pass too (Google decides when the phone shows it).
-    if (!ready || !issuerId() || !card.walletGoogle) return res.status(200).json({ sent: pushed > 0, pushed });
+    // 2) Apple Wallet: the pass's "Your order" line changes, and iPhone shows it as a notification within seconds.
+    let appleN = 0;
+    if (card.walletApple && apple?.enabled()) {
+      const text = ready ? (ar ? `#${o.code} جاهز ☕ أظهر بطاقتك للاستلام` : `#${o.code} is ready ☕ Show your card to collect it`) : (ar ? `تعذّر قبول الطلب #${o.code}` : `Order #${o.code} was declined`);
+      await firestore.doc(`cards/${o.cardToken}`).set({ orderMsg: { text, at: Date.now() } }, { merge: true });
+      appleN = await apple.touch(o.cardToken, card).catch((e) => { console.error('apple order', e.message); return 0; });
+    }
+    // 3) A message on the Google Wallet pass too (Google decides when the phone shows it).
+    if (!ready || !issuerId() || !card.walletGoogle) return res.status(200).json({ sent: pushed > 0 || appleN > 0, pushed, apple: appleN });
     const r = await google.addMessage(objectIdFor(issuerId(), card), {
       id: `ready_${oid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60),
       header: ar ? `طلبك #${o.code} جاهز ☕` : `Order #${o.code} is ready ☕`,
       body: ar ? `أظهر بطاقتك في ${b?.name || ''} لاستلام طلبك.` : `Show your card at ${b?.name || ''} to collect it.`,
       displayInterval: messageWindow(1),
     }, true);
-    return res.status(200).json({ sent: pushed > 0 || r !== 'missing', pushed, result: r });
+    return res.status(200).json({ sent: pushed > 0 || appleN > 0 || r !== 'missing', pushed, apple: appleN, result: r });
   }
 
   return async function handler(req, res) {
@@ -222,7 +239,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     const route = path.replace(/\/+$/, '').split('/').pop();
     if (route === 'order-ready') { try { return await orderReady(req, res); } catch (e) { console.error('order-ready', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'receipt') { try { return await receiptEmail(req, res); } catch (e) { console.error('receipt', e); return res.status(500).json({ error: 'email-failed' }); } }
-    if (route === 'message') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await message(req, res); } catch (e) { console.error('message', e); return res.status(500).json({ error: 'failed' }); } }
+    if (route === 'message') { if (!issuerId() && !apple?.enabled()) return res.status(503).json({ error: 'wallet-off' }); try { return await message(req, res); } catch (e) { console.error('message', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'sync') { try { return await sync(req, res); } catch (e) { console.error('sync', e); return res.status(204).send(''); } }
     if (!issuerId()) return page(res, 503, 'Google Wallet is not set up yet.', 'محفظة Google غير مفعّلة بعد.');
     try {

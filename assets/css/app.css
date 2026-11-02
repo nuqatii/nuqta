@@ -679,6 +679,12 @@ a.wtile:active { transform: scale(.985); }
 .qty b { min-width: 16px; text-align: center; }
 .basket-bar { position: sticky; bottom: 76px; padding-top: 8px; z-index: 5; }
 .order-card.ready { border-color: var(--ok); }
+.past-orders { margin-top: 18px; }
+.past-orders > summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: center; }
+.past-orders > summary::-webkit-details-marker { display: none; }
+.past-orders > summary::after { content: "▾"; margin-inline-start: auto; transition: transform .2s; }
+.past-orders[open] > summary::after { transform: rotate(180deg); }
+.past-orders .list { padding: 0 14px 10px; }
 .o-steps { display: grid; grid-template-columns: repeat(3, 1fr); list-style: none; margin: 0; padding: 0; gap: 6px; }
 .o-steps li { display: grid; gap: 6px; font-size: .78rem; color: var(--muted); }
 .o-steps li i { height: 6px; border-radius: 3px; background: var(--line); }
