@@ -252,3 +252,34 @@ test('ordering pilot: pass gets an "Order ahead" link only when switched on; ord
   assert.equal(ok.statusCode, 200); assert.equal(ok.body.sent, true);
   assert.match(sent[0][1], /K7P/); assert.equal(sent[0][2], true);
 });
+
+test('wallet messages: they get an end date, and updates drop expired or undated ones', async () => {
+  const { keepMessages, messageWindow } = await import('../functions/google.js');
+  const now = Date.UTC(2026, 10, 3);
+  const w = messageWindow(7, now);
+  assert.equal(Date.parse(w.end.date) - now, 7 * 86400000);
+  const kept = keepMessages([{ id: 'old' }, { id: 'expired', displayInterval: messageWindow(1, now - 3 * 86400000) }, { id: 'live', displayInterval: w }], now);
+  assert.deepEqual(kept.map((m) => m.id), ['live']);
+});
+
+test('order ready: instant phone notification (web push) to every saved device, then the wallet message', async () => {
+  const L = await import('../functions/shared/loyalty.js');
+  const { createWebPush } = await import('../functions/push.js');
+  const docs = {
+    'businesses/urban01': { ...BIZ, lang: 'en', name: 'Urban Coffee' }, 'businesses/urban01/members/u_staff': { role: 'staff' },
+    'businesses/urban01/orders/ord2': { status: 'ready', code: 'Q2M', cardToken: TOKEN },
+    [`cards/${TOKEN}`]: { ...CARD, walletGoogle: false },
+    [`cards/${TOKEN}/push/a1`]: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'x', auth: 'y' } },
+    [`cards/${TOKEN}/push/b2`]: { endpoint: 'https://fcm.googleapis.com/fcm/send/old', keys: { p256dh: 'x', auth: 'y' } },
+  };
+  const delivered = [];
+  const send = async (sub, payload) => { if (sub.endpoint.endsWith('old')) { const e = new Error('gone'); e.statusCode = 410; throw e; } delivered.push([sub.endpoint, JSON.parse(payload)]); };
+  const push = createWebPush({ publicKey: 'PUB', privateKey: 'PRIV', send });
+  const h = createHandler({ firestore: fakeFirestore(docs), google: { addMessage: async () => 'sent' }, config: { ...CFG, GOOGLE_WALLET: { issuerId: '', region: 'europe-west1' } }, L, verifyToken: async (t) => ({ uid: t }), push });
+  const res = fakeRes();
+  await h({ method: 'POST', path: '/gwallet/order-ready', query: {}, body: { bid: 'urban01', oid: 'ord2' }, headers: { authorization: 'Bearer u_staff' } }, res);
+  assert.equal(res.statusCode, 200); assert.equal(res.body.pushed, 1);
+  assert.equal(delivered[0][1].title, 'Order #Q2M is ready ☕');
+  assert.match(delivered[0][1].url, new RegExp(`rewards\\.html\\?c=${TOKEN}#order$`));
+  assert.equal(createWebPush({ publicKey: 'PUB', privateKey: '' }).enabled(), false);   // off until the secret exists
+});

@@ -15,6 +15,7 @@ import { CONFIG } from './shared/config.js';
 import { createGoogle } from './google.js';
 import { createHandler } from './handler.js';
 import { createMailer } from './email.js';
+import { createWebPush } from './push.js';
 import * as receipt from './shared/receipt.js';
 import { createApple, createPusher, loadAppleCerts } from './apple.js';
 import { readFileSync, existsSync } from 'node:fs';
@@ -30,5 +31,5 @@ const apple = createApple({ firestore, config: CONFIG, certs, push: certs ? crea
 
 export const gwallet = onRequest(
   { region: CONFIG.GOOGLE_WALLET?.region || 'europe-west1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 120 },
-  createHandler({ firestore, google: createGoogle(), config: CONFIG, apple, verifyToken: (t) => getAuth().verifyIdToken(t), L, mailer: createMailer(), receipt }),
+  createHandler({ firestore, google: createGoogle(), config: CONFIG, apple, verifyToken: (t) => getAuth().verifyIdToken(t), L, mailer: createMailer(), receipt, push: createWebPush({ publicKey: CONFIG.PUSH_PUBLIC_KEY }) }),
 );

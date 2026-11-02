@@ -21,6 +21,25 @@ let installPrompt = null;
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; document.querySelector('[data-install]')?.removeAttribute('hidden'); });
+// "Notify me when my order is ready" (web push). Android/desktop browsers; iPhone only from the Home Screen app.
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!CONFIG.PUSH_PUBLIC_KEY && location.protocol === 'https:';
+const pushKey = (token) => 'nuqta_push_' + token;
+const pushOn = (token) => { try { return Notification.permission === 'granted' && localStorage.getItem(pushKey(token)) === '1'; } catch { return false; } };
+function b64ToBytes(s) { const p = '='.repeat((4 - (s.length % 4)) % 4); const raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
+// Must start inside a tap (browsers only ask for permission then); finishes after the order is sent.
+function askPush(token) {
+  if (!pushSupported()) return Promise.resolve(false);
+  const perm = Notification.permission === 'granted' ? Promise.resolve('granted') : Notification.requestPermission();
+  return perm.then(async (p) => {
+    if (p !== 'granted') return false;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(CONFIG.PUSH_PUBLIC_KEY) }));
+    await S.savePushSubscription(token, sub);
+    try { localStorage.setItem(pushKey(token), '1'); } catch { /* ignore */ }
+    return true;
+  }).catch((e) => { console.warn('push', e); return false; });
+}
+
 // Back-to-wallet button used in the card and join headers.
 const walletLink = () => `<a class="btn ghost sm icon" href="rewards.html" aria-label="${t('w_title')}" title="${t('w_title')}">${icon(lang === 'ar' ? 'chevron' : 'back')}</a>`;
 
@@ -225,6 +244,8 @@ async function cardApp(token) {
       ${o.status === 'declined' ? `<div class="note">${icon('info')}<span>${t('o_declined_msg')}${o.reason ? ': ' + esc(o.reason) : ''}</span></div>` : ''}
       <div class="small muted">${o.items.map((l) => `${fmtNum(l.qty)}× ${esc(itemName(l))}`).join(' · ')}</div>
       <div class="spread"><span class="small muted">${ago(o.createdAt)}${o.pickup ? ' · ' + esc(o.pickup) : ''}</span><b>${money(o.total)}</b></div>
+      ${ORDER_OPEN.includes(o.status) && pushSupported() && !pushOn(token) ? `<button class="btn sm" data-push style="justify-self:start">🔔 ${t('o_push_btn')}</button>` : ''}
+      ${ORDER_OPEN.includes(o.status) && pushOn(token) ? `<span class="tiny muted">🔔 ${t('o_push_on')}</span>` : ''}
       ${o.status === 'new' ? `<button class="btn sm ghost" data-ocancel="${esc(o.id)}" style="justify-self:start">${t('o_cancel')}</button>` : ''}
     </div></section>`;
   }
@@ -251,11 +272,16 @@ async function cardApp(token) {
       <form class="form" id="of" style="margin-top:12px">
         <label class="field"><span>${t('o_pickup')}</span><select class="input" name="pickup">${times.map((x) => `<option value="${x}">${t('o_pick_' + x)}</option>`).join('')}</select></label>
         <label class="field"><span>${t('o_note')} <span class="muted">(${t('optional')})</span></span><input class="input" name="note" maxlength="200" placeholder="${t('o_note_ph')}"></label>
+        ${pushSupported() && !pushOn(token) ? `<label class="check"><input type="checkbox" name="push" checked><span>🔔 ${t('o_push_opt')}</span></label>` : ''}
+        ${!pushSupported() && isIOS && !standalone ? `<p class="tiny muted">${t('o_push_ios')}</p>` : ''}
         <div class="note">${icon('info')}<span>${t('o_pay_pickup')}</span></div></form>`,
     actions: [{ label: t('cancel'), value: null }, { label: t('o_send'), kind: 'primary', onClick: async (m) => {
       const f = $('#of', m);
+      const pushing = f.push?.checked ? askPush(token) : null;   // ask now, while it's still the tap
       const r = await S.placeOrder(token, { items: priced.lines.map((l) => ({ id: l.id, qty: l.qty })), note: f.note.value, pickup: t('o_pick_' + f.pickup.value) });
-      cart.clear(); toast(t('o_sent', { code: r.code })); scrollTo(0, 0); return true;
+      cart.clear(); toast(t('o_sent', { code: r.code })); scrollTo(0, 0);
+      if (pushing) pushing.then((ok) => { if (ok) toast(t('o_push_on')); });
+      return true;
     } }] }).then(() => render());
   }
   function watchOrders() {
@@ -278,6 +304,7 @@ async function cardApp(token) {
     root.querySelectorAll('[data-inc]').forEach((x) => (x.onclick = () => { cart.set(x.dataset.inc, Math.min(20, (cart.get(x.dataset.inc) || 0) + 1)); render(); }));
     root.querySelectorAll('[data-dec]').forEach((x) => (x.onclick = () => { const q = (cart.get(x.dataset.dec) || 0) - 1; if (q > 0) cart.set(x.dataset.dec, q); else cart.delete(x.dataset.dec); render(); }));
     $('#basket')?.addEventListener('click', basketDialog);
+    root.querySelectorAll('[data-push]').forEach((x) => (x.onclick = () => askPush(token).then((ok) => { toast(ok ? t('o_push_on') : t('o_push_denied'), ok ? '' : 'bad'); render(); })));
     root.querySelectorAll('[data-ocancel]').forEach((x) => (x.onclick = async () => {
       if (!(await modal({ title: t('o_cancel'), body: `<p>${t('o_cancel_q')}</p>`, actions: [{ label: t('cancel'), value: false }, { label: t('o_cancel'), kind: 'danger', value: true }] }))) return;
       try { await S.cancelMyOrder(token, x.dataset.ocancel); } catch (e) { showError(e); }

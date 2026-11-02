@@ -48,6 +48,10 @@ export const CONFIG = {
     retentionDays: 90,
   },
 
+  // Phone notifications from the card (web push). Public half of the key pair; the private half is the
+  // GitHub secret VAPID_PRIVATE_KEY (PUSH_SETUP.md). Safe to publish.
+  PUSH_PUBLIC_KEY: 'BCJMiyIEf32TWcVnqrrg4qtBetnqGk4R7DjmFeIpc-XDEL363H8dBkdKOpf_rFVaR1TC6YulO7miARywNNTP2so',
+
   DEFAULT_LANG: 'ar',          // 'ar' | 'en'
   DEFAULT_CURRENCY: 'SYP',     // per-business, editable in Settings
 };

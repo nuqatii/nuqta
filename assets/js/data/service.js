@@ -440,6 +440,15 @@ export function createService({ db, auth, mode }) {
       ]);
       return { id, code, total: priced.total };
     },
+    // The customer's phone asks to be notified when an order is ready (web push subscription).
+    async savePushSubscription(token, sub) {
+      const j = typeof sub?.toJSON === 'function' ? sub.toJSON() : sub;
+      if (!j?.endpoint || !j?.keys?.p256dh || !j?.keys?.auth) fail('invalid');
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(j.endpoint));
+      const id = [...new Uint8Array(buf)].slice(0, 16).map((x) => x.toString(16).padStart(2, '0')).join('');
+      await db.set(`cards/${token}/push/${id}`, { endpoint: String(j.endpoint).slice(0, 900), keys: { p256dh: String(j.keys.p256dh).slice(0, 200), auth: String(j.keys.auth).slice(0, 100) }, at: now() });
+      return id;
+    },
     async cancelMyOrder(token, id) {
       const o = await db.get(`cards/${token}/orders/${id}`); if (!o) fail('not-found');
       if (o.status !== 'new') fail('order-in-progress');
@@ -470,12 +479,12 @@ export function createService({ db, auth, mode }) {
         { op: 'update', path: P.sub(bid, 'orders', id), data: { ...patch, by: user()?.uid || null } },
         { op: 'update', path: `cards/${o.cardToken}/orders/${id}`, data: patch },
       ]);
-      if (status === 'ready') S._orderReadyPing(bid, id);
+      if (status === 'ready' || status === 'declined') S._orderReadyPing(bid, id);
       return { earned };
     },
     // Google Wallet "your order is ready" notification (server function; quietly skipped where wallets are off).
     async _orderReadyPing(bid, id) {
-      const base = mode === 'firebase' && walletFnUrl() ? walletBase() : ''; if (!base) return;
+      const base = mode === 'firebase' && (walletFnUrl() || appleFnUrl()) ? walletBase() : ''; if (!base) return;
       try { const token = await auth.idToken?.(); await fetch(`${base}/order-ready`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ bid, oid: id }) }); } catch { /* best effort */ }
     },
     // Admin switches for the pilot.
@@ -484,7 +493,7 @@ export function createService({ db, auth, mode }) {
       if (key !== 'ordering') fail('invalid');
       const b = await db.get(P.biz(bid)); if (!b) fail('not-found');
       await db.update(P.biz(bid), { features: { ...(b.features || {}), [key]: !!on } });
-      walletPing('b=' + encodeURIComponent(bid));
+      walletPing('b=' + encodeURIComponent(bid) + '&objects=1');   // saved Google passes get / lose the "Order ahead" link
     },
     async adminSetPlatformFeature(key, on) {
       if (!(await S.isPlatformAdmin())) fail('permission-denied');
@@ -587,7 +596,7 @@ export function createService({ db, auth, mode }) {
     async saveCampaign(bid, c) {
       await need(bid, 'campaigns'); const id = c.id || db.newId();
       await db.set(P.sub(bid, 'campaigns', id), {
-        name: L.clampStr(c.name, 80), segment: c.segment, channel: L.CAMPAIGN_CHANNELS.includes(c.channel) ? c.channel : 'whatsapp', header: L.clampStr(c.header || '', 60),
+        name: L.clampStr(c.name, 80), segment: c.segment, channel: L.CAMPAIGN_CHANNELS.includes(c.channel) ? c.channel : 'whatsapp', header: L.clampStr(c.header || '', 60), days: [1, 3, 7, 14, 30].includes(Number(c.days)) ? Number(c.days) : 7,
         message: L.clampStr(c.message, 1000), status: c.status || 'draft', recipients: c.recipients || 0,
         createdAt: c.createdAt || now(), preparedAt: c.preparedAt || null,
       });
@@ -629,7 +638,7 @@ export function createService({ db, auth, mode }) {
       return id;
     },
     // Sends a campaign to customers' Google Wallet passes (server checks the role again).
-    async sendWalletCampaign(bid, campaignId, items) {
+    async sendWalletCampaign(bid, campaignId, items, days = 7) {
       await need(bid, 'campaigns');
       if (mode === 'demo') {   // the demo has no Google account: pretend every pass received it
         await db.update(P.sub(bid, 'campaigns', campaignId), { status: 'sent', sentAt: now(), walletSent: items.length, walletSilent: 0 });
@@ -641,7 +650,7 @@ export function createService({ db, auth, mode }) {
       if (!token) fail('unauthenticated');
       const total = { sent: 0, silent: 0, notInWallet: 0, failed: 0 };
       for (let i = 0; i < items.length; i += 200) {
-        const r = await fetch(`${base}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ bid, campaignId, items: items.slice(i, i + 200) }) });
+        const r = await fetch(`${base}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ bid, campaignId, items: items.slice(i, i + 200), days }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) fail(j.error || 'failed');
         for (const k of Object.keys(total)) total[k] += j[k] || 0;

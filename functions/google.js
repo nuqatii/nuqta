@@ -8,6 +8,11 @@ const API = 'https://walletobjects.googleapis.com/walletobjects/v1';
 const SCOPES = ['https://www.googleapis.com/auth/wallet_object.issuer', 'https://www.googleapis.com/auth/cloud-platform'];
 
 const b64url = (s) => Buffer.from(s).toString('base64url');
+// A message shows on the pass until its end date. Messages without one (sent before Nov 2026) are dropped on the next update.
+export const messageWindow = (days, now = Date.now()) => ({ start: { date: new Date(now).toISOString() }, end: { date: new Date(now + Math.max(1, days) * 86400000).toISOString() } });
+export function keepMessages(list, now = Date.now()) {
+  return (list || []).filter((m) => { const end = Date.parse(m?.displayInterval?.end?.date || ''); return Number.isFinite(end) && end > now; });
+}
 const statusOf = (e) => e?.response?.status || e?.status || e?.code;
 
 export function createGoogle({ auth = new GoogleAuth({ scopes: SCOPES }) } = {}) {
@@ -35,13 +40,13 @@ export function createGoogle({ auth = new GoogleAuth({ scopes: SCOPES }) } = {})
     async getObject(id) { return call('GET', `/loyaltyObject/${enc(id)}`); },
     async upsertObject(obj) {
       const cur = await G.getObject(obj.id);
-      return cur ? call('PUT', `/loyaltyObject/${enc(obj.id)}`, obj) : call('POST', '/loyaltyObject', obj);
+      return cur ? call('PUT', `/loyaltyObject/${enc(obj.id)}`, { ...obj, messages: keepMessages(cur.messages) }) : call('POST', '/loyaltyObject', obj);
     },
-    // Updates a pass only if the customer has already saved it (never creates one).
+    // Updates a pass only if the customer has already saved it (never creates one). Keeps messages still showing.
     async updateObjectIfExists(obj) {
       const cur = await G.getObject(obj.id);
       if (!cur) return false;
-      await call('PUT', `/loyaltyObject/${enc(obj.id)}`, obj);
+      await call('PUT', `/loyaltyObject/${enc(obj.id)}`, { ...obj, messages: keepMessages(cur.messages) });
       return true;
     },
     // Adds a message to one pass. notify=true also pushes a phone notification (Google allows 3 per pass per 24h);

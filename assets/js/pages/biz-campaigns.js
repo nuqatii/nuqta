@@ -52,13 +52,14 @@ export default async function campaigns(ctx, el) {
       <p class="small"><b id="aud"></b></p>
       <div id="gwx" class="stack" style="gap:10px">
         <div class="note">${icon('info')}<span>${t('gw_camp_note')}</span></div>
-        <label class="field"><span>${t('gw_title')}</span><input class="input" id="ch" value="${esc(c.header || b.name)}" maxlength="60"></label>
+        <div class="grid2"><label class="field"><span>${t('gw_title')}</span><input class="input" id="ch" value="${esc(c.header || b.name)}" maxlength="60"></label>
+        <label class="field"><span>${t('gw_days')}</span><select class="input" id="cd">${[1, 3, 7, 14, 30].map((d) => `<option value="${d}" ${(c.days || 7) === d ? 'selected' : ''}>${t('gw_days_n', { n: d })}</option>`).join('')}</select></label></div>
       </div>
       <label class="field"><span>${t('cp_message')}</span><textarea class="input" id="cm" maxlength="1000">${esc(c.message)}</textarea></label>
       <div class="row wrap"><span class="small muted">${t('cp_vars')}:</span>${TEMPLATE_VARS.map((v) => `<button type="button" class="chip" data-var="${v}">{{${v}}}</button>`).join('')}</div>
       <div class="note" style="flex-direction:column;gap:4px"><span class="small muted" id="pvl"></span><span id="pv" style="white-space:pre-wrap"></span></div>
     </div>`;
-    const sync = (m) => { c.name = $('#cn', m).value; c.segment = $('#cs', m).value; c.channel = $('#cc', m).value; c.message = $('#cm', m).value; c.header = $('#ch', m).value; };
+    const sync = (m) => { c.name = $('#cn', m).value; c.segment = $('#cs', m).value; c.channel = $('#cc', m).value; c.message = $('#cm', m).value; c.header = $('#ch', m).value; c.days = Number($('#cd', m).value) || 7; };
     const refresh = (m) => { sync(m); const a = audience(); $('#aud', m).textContent = c.channel === 'gwallet' ? t('gw_recipients', { n: fmtNum(a.length), all: fmtNum(group().length) }) : t('cp_recipients', { n: fmtNum(a.length) }); $('#gwx', m).hidden = c.channel !== 'gwallet'; const pb = m.querySelector('.modal-f .btn.primary'); if (pb) pb.textContent = c.channel === 'gwallet' ? t('gw_send') : t('cp_prepare'); $('#pvl', m).textContent = t('cp_preview', { name: a[0]?.firstName || '—' }); $('#pv', m).textContent = renderTemplate(c.message, sampleVars(a[0])); };
     modal({ title: camp ? c.name : t('cp_new'), wide: true, body: html,
       actions: [
@@ -72,7 +73,7 @@ export default async function campaigns(ctx, el) {
             if (!(await confirmBox(t('gw_send'), t('gw_confirm', { n: fmtNum(a.length) }), t('gw_send')))) return false;
             const id = await ctx.S.saveCampaign(ctx.bid, c);
             const items = a.map((x) => ({ customerId: x.id, header: renderTemplate(c.header || b.name, sampleVars(x)), body: renderTemplate(c.message, sampleVars(x)) }));
-            const r = await ctx.S.sendWalletCampaign(ctx.bid, id, items);
+            const r = await ctx.S.sendWalletCampaign(ctx.bid, id, items, c.days || 7);
             return { wallet: r, name: c.name };
           }
           const id = await ctx.S.saveCampaign(ctx.bid, c);

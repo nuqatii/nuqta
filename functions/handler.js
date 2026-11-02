@@ -1,12 +1,12 @@
 // Request handler for /gwallet/*. Firestore and Google are passed in so tests can fake them.
 import { buildClass, buildObject, classIdFor, objectIdFor, saveClaims } from './pass.js';
-import { saveUrl } from './google.js';
+import { saveUrl, messageWindow } from './google.js';
 import { stampsPng } from './stamps.js';
 
 const TOKEN_RE = /^[A-Za-z0-9]{16,64}$/;
 const ID_RE = /^[A-Za-z0-9_-]{4,64}$/;
 
-export function createHandler({ firestore, google, config, apple = null, verifyToken = null, L = null, mailer = null, receipt = null }) {
+export function createHandler({ firestore, google, config, apple = null, verifyToken = null, L = null, mailer = null, receipt = null, push = null }) {
   const siteUrl = config.SITE_URL.endsWith('/') ? config.SITE_URL : config.SITE_URL + '/';
   const issuerId = () => String(config.GOOGLE_WALLET?.issuerId || '');
   const fnBase = () => `https://${config.GOOGLE_WALLET.region}-${config.FIREBASE.projectId}.cloudfunctions.net/gwallet`;
@@ -37,6 +37,18 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
 <p dir="rtl">${ar}</p><p>${en}</p><p><a href="${siteUrl}rewards.html">${siteUrl}rewards.html</a></p></body>`);
   }
 
+  // Re-sends every saved Google pass of one business (e.g. after online ordering was switched on), 5 at a time.
+  async function refreshObjects(bid, business) {
+    await firestore.doc(`businesses/${bid}`).set({ walletObjectsSyncedAt: Date.now() }, { merge: true });
+    const snap = await firestore.collection('cards').where('businessId', '==', bid).where('walletGoogle', '==', true).limit(1000).get();
+    const ordering = await orderingFor(business); const rewards = await rewardsOf(bid); const iss = issuerId();
+    const cards = snap.docs.map((d) => ({ token: d.id, card: d.data() })).filter((x) => !x.card.deleted);
+    let i = 0;
+    const worker = async () => { while (i < cards.length) { const { token, card } = cards[i++];
+      try { await google.updateObjectIfExists(buildObject({ issuerId: iss, token, card, business, rewards, siteUrl, heroUrl: heroUrlFor(bid, business), ordering })); } catch (e) { console.error('refresh', e.message); } } };
+    await Promise.all(Array.from({ length: 5 }, worker));
+  }
+
   async function save(req, res) {
     const token = String(req.query.t || '');
     const d = await loadCard(token);
@@ -65,6 +77,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     } else if (ID_RE.test(bid)) {
       const business = await get(`businesses/${bid}`);
       if (business && iss) jobs.push(google.getClass(classIdFor(iss, bid)).then(async (c) => c && google.upsertClass(buildClass({ issuerId: iss, bid, business, logoUrl: logoUrl(bid, business), locations: await locationsOf(bid) }))));
+      if (business && iss && req.query.objects === '1' && Date.now() - (business.walletObjectsSyncedAt || 0) > 10 * 60 * 1000) jobs.push(refreshObjects(bid, business));
       if (business && apple?.enabled()) jobs.push(apple.touchBusiness(bid));
     }
     const out = await Promise.allSettled(jobs);
@@ -99,6 +112,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     try { uid = tok && verifyToken ? (await verifyToken(tok)).uid : null; } catch { uid = null; }
     if (!uid) return res.status(401).json({ error: 'unauthenticated' });
     const { bid, campaignId, items } = req.body || {};
+    const days = [1, 3, 7, 14, 30].includes(Number(req.body?.days)) ? Number(req.body.days) : 7;
     if (!ID_RE.test(String(bid || '')) || !Array.isArray(items) || !items.length || items.length > 500) return res.status(400).json({ error: 'invalid' });
     const member = await get(`businesses/${bid}/members/${uid}`);
     if (!member || !(L ? L.can(member.role, 'campaigns') : ['owner', 'marketing'].includes(member.role))) return res.status(403).json({ error: 'permission-denied' });
@@ -117,7 +131,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
           if (!c || !c.walletGoogle || !c.cardToken) { out.notInWallet++; continue; }
           const card = await get(`cards/${c.cardToken}`);
           if (!card || card.deleted) { out.notInWallet++; continue; }
-          const r = await google.addMessage(objectIdFor(iss, card), { id: `m${stamp}_${cid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60), header: clip(it.header, 60), body: clip(it.body, 500) }, true);
+          const r = await google.addMessage(objectIdFor(iss, card), { id: `m${stamp}_${cid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60), header: clip(it.header, 60), body: clip(it.body, 500), displayInterval: messageWindow(days, stamp) }, true);
           if (r === 'missing') out.notInWallet++; else out[r]++;
         } catch (e) { out.failed++; console.error('message', e.message); }
       }
@@ -168,16 +182,30 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
     const member = await get(`businesses/${bid}/members/${uid}`);
     if (!member || !(L ? L.can(member.role, 'orders') : ['owner', 'manager', 'staff'].includes(member.role))) return res.status(403).json({ error: 'permission-denied' });
     const o = await get(`businesses/${bid}/orders/${oid}`);
-    if (!o || o.status !== 'ready') return res.status(409).json({ error: 'not-ready' });
+    if (!o || !['ready', 'declined'].includes(o.status)) return res.status(409).json({ error: 'not-ready' });
     const card = o.cardToken ? await get(`cards/${o.cardToken}`) : null;
-    if (!card?.walletGoogle || card.deleted) return res.status(200).json({ sent: false });
+    if (!card || card.deleted) return res.status(200).json({ sent: false });
     const b = await get(`businesses/${bid}`); const ar = (b?.lang || 'ar') !== 'en';
+    const ready = o.status === 'ready';
+    // 1) Instant phone notification (web push) to every device that asked for it on this card.
+    let pushed = 0;
+    if (push?.enabled()) {
+      const subs = (await firestore.collection(`cards/${o.cardToken}/push`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+      const title = ready ? (ar ? `طلبك #${o.code} جاهز ☕` : `Order #${o.code} is ready ☕`) : (ar ? `تعذّر قبول الطلب #${o.code}` : `Order #${o.code} was declined`);
+      const body = ready ? (ar ? `أظهر بطاقتك في ${b?.name || ''} لاستلام طلبك.` : `Show your card at ${b?.name || ''} to collect it.`) : (o.reason || (ar ? 'تواصل مع المحل للتفاصيل.' : 'Please contact the shop for details.'));
+      const r1 = await push.notifyAll(subs, { title, body, tag: `order-${oid}`, url: `${siteUrl}rewards.html?c=${o.cardToken}#order` });
+      pushed = r1.sent;
+      await Promise.all(r1.gone.map((id) => firestore.doc(`cards/${o.cardToken}/push/${id}`).delete?.().catch(() => {})));
+    }
+    // 2) A message on the Google Wallet pass too (Google decides when the phone shows it).
+    if (!ready || !issuerId() || !card.walletGoogle) return res.status(200).json({ sent: pushed > 0, pushed });
     const r = await google.addMessage(objectIdFor(issuerId(), card), {
       id: `ready_${oid}`.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60),
       header: ar ? `طلبك #${o.code} جاهز ☕` : `Order #${o.code} is ready ☕`,
       body: ar ? `أظهر بطاقتك في ${b?.name || ''} لاستلام طلبك.` : `Show your card at ${b?.name || ''} to collect it.`,
+      displayInterval: messageWindow(1),
     }, true);
-    return res.status(200).json({ sent: r !== 'missing', result: r });
+    return res.status(200).json({ sent: pushed > 0 || r !== 'missing', pushed, result: r });
   }
 
   return async function handler(req, res) {
@@ -192,7 +220,7 @@ export function createHandler({ firestore, google, config, apple = null, verifyT
       catch (e) { console.error('apple', e); return res.status(500).send(''); }
     }
     const route = path.replace(/\/+$/, '').split('/').pop();
-    if (route === 'order-ready') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await orderReady(req, res); } catch (e) { console.error('order-ready', e); return res.status(500).json({ error: 'failed' }); } }
+    if (route === 'order-ready') { try { return await orderReady(req, res); } catch (e) { console.error('order-ready', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'receipt') { try { return await receiptEmail(req, res); } catch (e) { console.error('receipt', e); return res.status(500).json({ error: 'email-failed' }); } }
     if (route === 'message') { if (!issuerId()) return res.status(503).json({ error: 'wallet-off' }); try { return await message(req, res); } catch (e) { console.error('message', e); return res.status(500).json({ error: 'failed' }); } }
     if (route === 'sync') { try { return await sync(req, res); } catch (e) { console.error('sync', e); return res.status(204).send(''); } }
