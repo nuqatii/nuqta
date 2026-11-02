@@ -11,6 +11,7 @@ on:
       - 'assets/js/config.js'
       - 'assets/js/core/loyalty.js'
       - 'assets/js/ui/icons.js'
+      - 'assets/js/core/receipt.js'
       - 'firebase.json'
       - '.github/workflows/firebase-deploy.yml'
   workflow_dispatch: {}
@@ -44,7 +45,7 @@ jobs:
         if: steps.key.outputs.ok == 'true'
         run: |
           mkdir -p functions/shared
-          cp assets/js/core/loyalty.js assets/js/config.js assets/js/ui/icons.js functions/shared/
+          cp assets/js/core/loyalty.js assets/js/core/receipt.js assets/js/config.js assets/js/ui/icons.js functions/shared/
 
       - name: Apple Wallet signing keys (only if set up)
         if: steps.key.outputs.ok == 'true'
@@ -59,6 +60,18 @@ jobs:
             echo "Apple Wallet keys not set - skipping"
           fi
 
+      - name: Email sending key (only if set up)
+        if: steps.key.outputs.ok == 'true'
+        env:
+          RESEND_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ -n "$RESEND_KEY" ]; then
+            printf 'RESEND_API_KEY=%s\n' "$RESEND_KEY" >> functions/.env
+            echo "Email key added"
+          else
+            echo "Email key not set - skipping"
+          fi
+
       - name: Install function packages
         if: steps.key.outputs.ok == 'true'
         run: npm install --prefix functions --no-audit --no-fund
@@ -70,4 +83,5 @@ jobs:
 
       - name: Deploy functions and Firestore rules
         if: steps.key.outputs.ok == 'true'
-        run: npx --yes firebase-tools@14 deploy --only functions,firestore:rules --project nuqati-39894 --non-interactive --force
+        # The test site's repository sets the variables FIREBASE_PROJECT and FIREBASE_DEPLOY (TEST_SITE_SETUP.md).
+        run: npx --yes firebase-tools@14 deploy --only "${{ vars.FIREBASE_DEPLOY || 'functions,firestore:rules' }}" --project "${{ vars.FIREBASE_PROJECT || 'nuqati-39894' }}" --non-interactive --force
